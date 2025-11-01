@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 205 100% 98%;
+    --foreground: 210 50% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 50% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 50% 15%;
+
+    --primary: 210 95% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 180 70% 50%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 210 20% 50%;
+
+    --accent: 180 70% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 30% 88%;
+    --input: 210 30% 88%;
+    --ring: 210 95% 45%;
+
+    --radius: 1rem;
+
+    --gradient-ocean: linear-gradient(135deg, hsl(210 95% 45%), hsl(180 70% 50%));
+    --gradient-subtle: linear-gradient(180deg, hsl(205 100% 98%), hsl(210 100% 95%));
+    --shadow-ocean: 0 10px 40px -10px hsl(210 95% 45% / 0.3);
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dark {
+    --background: 210 50% 8%;
+    --foreground: 210 40% 98%;
+
+    --card: 210 45% 12%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 210 45% 12%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 95% 55%;
+    --primary-foreground: 210 50% 8%;
+
+    --secondary: 180 70% 45%;
+    --secondary-foreground: 210 50% 8%;
+
+    --muted: 210 40% 20%;
+    --muted-foreground: 210 30% 70%;
+
+    --accent: 180 70% 45%;
+    --accent-foreground: 210 50% 8%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 210 40% 20%;
+    --input: 210 40% 20%;
+    --ring: 210 95% 55%;
+
+    --gradient-ocean: linear-gradient(135deg, hsl(210 95% 55%), hsl(180 70% 45%));
+    --gradient-subtle: linear-gradient(180deg, hsl(210 50% 8%), hsl(210 50% 12%));
+    --shadow-ocean: 0 10px 40px -10px hsl(210 95% 55% / 0.4);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
