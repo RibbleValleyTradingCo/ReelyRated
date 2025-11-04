@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,12 +8,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Star, Trophy, Fish, Users as UsersIcon, BarChart3, Camera, Loader2 } from "lucide-react";
+import { Star, Trophy, Fish, BarChart3, Loader2, Settings, Sparkles } from "lucide-react";
 import { getFreshwaterSpeciesLabel } from "@/lib/freshwater-data";
 import { createNotification } from "@/lib/notifications";
+import { resolveAvatarUrl } from "@/lib/storage";
 
 interface Profile {
   username: string;
+  avatar_path: string | null;
   avatar_url: string | null;
   bio: string | null;
 }
@@ -32,9 +34,12 @@ interface Catch {
 interface FollowingProfile {
   id: string;
   username: string;
+  avatar_path: string | null;
   avatar_url: string | null;
   bio: string | null;
 }
+
+const PROFILE_STATUS_PLACEHOLDER = "Nothing here yet. Tell people what you fish for.";
 
 const Profile = () => {
   const { userId } = useParams();
@@ -49,25 +54,29 @@ const Profile = () => {
   const [followLoading, setFollowLoading] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingProfiles, setFollowingProfiles] = useState<FollowingProfile[]>([]);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const isOwnProfile = user?.id === userId;
+
+  const profileAvatarUrl = useMemo(
+    () => resolveAvatarUrl({ path: profile?.avatar_path, legacyUrl: profile?.avatar_url }),
+    [profile?.avatar_path, profile?.avatar_url]
+  );
 
   const fetchProfile = useCallback(async () => {
     if (!userId) return;
     setIsLoading(true);
     const { data, error } = await supabase
       .from("profiles")
-      .select("*")
+      .select("username, avatar_path, avatar_url, bio")
       .eq("id", userId)
       .single();
 
-    if (error) {
+    if (error || !data) {
       toast.error("Failed to load profile");
     } else {
-      setProfile(data);
-      setEditedBio(data.bio || "");
+      const profileRow = data as Profile;
+      setProfile(profileRow);
+      setEditedBio(profileRow.bio || "");
     }
     setIsLoading(false);
   }, [userId]);
@@ -88,7 +97,7 @@ const Profile = () => {
   const fetchFollowers = useCallback(async () => {
     if (!userId) return;
     const { count, error } = await supabase
-      .from("profiles_followers")
+      .from("profile_follows")
       .select("id", { count: "exact", head: true })
       .eq("following_id", userId);
 
@@ -100,12 +109,13 @@ const Profile = () => {
   const fetchFollowingProfiles = useCallback(async () => {
     if (!userId) return;
     const { data, error } = await supabase
-      .from("profiles_followers")
+      .from("profile_follows")
       .select(
         `
-          followed_profile:profiles!profiles_followers_following_id_fkey (
+          followed_profile:profiles!profile_follows_following_id_fkey (
             id,
             username,
+            avatar_path,
             avatar_url,
             bio
           )
@@ -124,7 +134,7 @@ const Profile = () => {
   const fetchFollowStatus = useCallback(async () => {
     if (!userId || !user || user.id === userId) return;
     const { data, error } = await supabase
-      .from("profiles_followers")
+      .from("profile_follows")
       .select("id")
       .eq("follower_id", user.id)
       .eq("following_id", userId)
@@ -162,7 +172,7 @@ const Profile = () => {
 
     if (isFollowing) {
       const { error } = await supabase
-        .from("profiles_followers")
+        .from("profile_follows")
         .delete()
         .eq("follower_id", user.id)
         .eq("following_id", userId);
@@ -174,7 +184,7 @@ const Profile = () => {
         setFollowersCount((count) => Math.max(0, count - 1));
       }
     } else {
-      const { error } = await supabase.from("profiles_followers").insert({
+      const { error } = await supabase.from("profile_follows").insert({
         follower_id: user.id,
         following_id: userId,
       });
@@ -215,16 +225,13 @@ const Profile = () => {
     }
   };
 
-  const calculateAverageRating = (ratings: { rating: number }[]) => {
-    if (ratings.length === 0) return "-";
-    const sum = ratings.reduce((acc, r) => acc + r.rating, 0);
-    return (sum / ratings.length).toFixed(1);
-  };
-
   const overallStats = useMemo(() => {
     const total = catches.length;
     const allRatings = catches.flatMap((catchItem) => catchItem.ratings.map((r) => r.rating));
-    const avgRating = allRatings.length > 0 ? (allRatings.reduce((acc, rating) => acc + rating, 0) / allRatings.length).toFixed(1) : "-";
+    const avgRating =
+      allRatings.length > 0
+        ? (allRatings.reduce((acc, rating) => acc + rating, 0) / allRatings.length).toFixed(1)
+        : "-";
 
     const heaviestCatch = catches
       .filter((catchItem) => catchItem.weight !== null)
@@ -253,363 +260,274 @@ const Profile = () => {
       latestCatch,
       followingCount: followingProfiles.length,
     };
-  }, [catches, followingProfiles.length]);
+  }, [catches, followingProfiles]);
 
-const formatWeight = (weight: number | null, unit: string | null) => {
-  if (!weight) return "-";
-  return `${weight}${unit === "kg" ? "kg" : "lb"}`;
-};
+  const formatWeight = (weight: number | null, unit: string | null) => {
+    if (weight === null || weight === undefined) return "-";
+    return `${weight}${unit === "kg" ? "kg" : "lb"}`;
+  };
 
   const formatSpecies = (species: string | null) => {
     if (!species) return "-";
     return getFreshwaterSpeciesLabel(species) ?? species.replace(/_/g, " ");
   };
 
-  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!user || !isOwnProfile) return;
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const statIconClasses =
+    "flex h-10 w-10 items-center justify-center rounded-full bg-sky-500/10 text-sky-500";
 
-    const maxSizeMb = 5;
-    if (file.size > maxSizeMb * 1024 * 1024) {
-      toast.error(`Please choose an image smaller than ${maxSizeMb}MB.`);
-      return;
-    }
+  const profileStatCards = (stats: {
+    total: number;
+    avgRating: string;
+    heaviestCatch: Catch | null;
+    topSpecies: { species: string; count: number } | null;
+  }) => [
+    {
+      label: "Total catches",
+      value: stats.total ?? 0,
+      hint: stats.total > 0 ? null : "Log your first catch",
+      icon: <Fish className="h-5 w-5" />,
+    },
+    {
+      label: "Average rating",
+      value: stats.avgRating !== "-" ? stats.avgRating : "–",
+      hint:
+        stats.avgRating !== "-"
+          ? null
+          : "Ratings will appear once others review your catches.",
+      icon: <Star className="h-5 w-5" />,
+    },
+    {
+      label: "Heaviest catch",
+      value: stats.heaviestCatch
+        ? formatWeight(stats.heaviestCatch.weight, stats.heaviestCatch.weight_unit)
+        : "–",
+      hint: stats.heaviestCatch ? null : "Add weights to your catches to track PBs.",
+      icon: <Trophy className="h-5 w-5" />,
+    },
+    {
+      label: "Top species",
+      value: stats.topSpecies
+        ? `${formatSpecies(stats.topSpecies.species)} (${stats.topSpecies.count})`
+        : "–",
+      hint: stats.topSpecies ? null : "No catches yet — species will appear here.",
+      icon: <BarChart3 className="h-5 w-5" />,
+    },
+  ];
 
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please choose a valid image file.");
-      return;
-    }
-
-    setIsUploadingAvatar(true);
-    try {
-      const extFromName = file.name.split(".").pop()?.toLowerCase();
-      const extFromType = file.type.split("/")[1];
-      const extension = extFromName || extFromType || "jpg";
-      const fileName = `${user.id}/${Date.now()}.${extension}`;
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(fileName, file, {
-          cacheControl: "3600",
-          upsert: true,
-          contentType: file.type,
-        });
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(fileName);
-
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ avatar_url: publicUrl })
-        .eq("id", user.id);
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      toast.success("Profile photo updated!");
-      setProfile((prev) => (prev ? { ...prev, avatar_url: publicUrl } : prev));
-    } catch (error) {
-      console.error("Avatar upload failed", error);
-      toast.error("Couldn't update profile photo. Please try again.");
-    } finally {
-      setIsUploadingAvatar(false);
-      if (avatarInputRef.current) {
-        avatarInputRef.current.value = "";
-      }
-    }
-  };
+  const statsCards = useMemo(
+    () =>
+      profileStatCards({
+        total: overallStats.total,
+        avgRating: overallStats.avgRating,
+        heaviestCatch: overallStats.heaviestCatch,
+        topSpecies: overallStats.topSpecies,
+      }),
+    [overallStats]
+  );
 
   if (isLoading || !profile) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted">
+      <div className="min-h-screen bg-slate-50">
         <Navbar />
-        <div className="container mx-auto px-4 py-8">Loading...</div>
+        <div className="mx-auto flex max-w-6xl items-center justify-center px-4 py-16 text-slate-500">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          Loading profile…
+        </div>
       </div>
     );
   }
 
+  const profileBio = profile.bio && profile.bio.trim().length > 0
+    ? profile.bio
+    : "No intro yet. Add your favourite waters and target species.";
+
+  const totalFollowers = followersCount ?? 0;
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted">
+    <div className="min-h-screen bg-slate-50">
       <Navbar />
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <Card className="mb-8 border-none bg-transparent shadow-none">
-          <div className="relative overflow-hidden rounded-3xl border border-primary/20 bg-slate-900 text-white shadow-2xl">
-            <div className="absolute -top-32 right-1/3 h-72 w-72 rounded-full bg-primary/40 blur-3xl" />
-            <div className="absolute top-12 left-8 hidden h-32 w-32 rounded-full bg-secondary/30 blur-2xl md:block" />
-            <div className="absolute bottom-0 right-0 hidden h-40 w-40 translate-x-1/3 translate-y-1/3 rounded-full bg-primary/50 blur-3xl md:block" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.2)_0%,_rgba(15,23,42,0.9)_45%,_rgba(10,12,15,0.95)_100%)]" />
-            <CardContent className="relative z-10 px-6 py-8 md:px-12 md:py-10">
-              <div className="grid gap-8 md:grid-cols-[auto,1fr,auto] md:items-center">
-                <div className="flex flex-col items-center gap-4">
-                  <Avatar className="h-32 w-32 border-4 border-white/70 shadow-2xl">
-                    <AvatarImage src={profile.avatar_url || ""} />
-                    <AvatarFallback className="text-2xl">
-                      {profile.username[0].toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  {isOwnProfile && (
-                    <>
-                      <input
-                        ref={avatarInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleAvatarUpload}
-                      />
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="flex items-center gap-2 rounded-full bg-white/20 text-white hover:bg-white/30 backdrop-blur"
-                        onClick={() => avatarInputRef.current?.click()}
-                        disabled={isUploadingAvatar}
-                      >
-                        {isUploadingAvatar ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Camera className="h-4 w-4" />
-                        )}
-                        {isUploadingAvatar ? "Uploading…" : "Update photo"}
-                      </Button>
-                    </>
-                  )}
-                </div>
-                <div className="text-center md:text-left">
-                  <div className="flex flex-wrap items-center justify-center gap-3 md:justify-start">
-                    <span className="rounded-full border border-white/40 bg-white/10 px-4 py-1 text-xs uppercase tracking-wide text-white/90 backdrop-blur">
+      <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="space-y-10">
+          <section
+            aria-label="Angler profile overview"
+            className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-900 text-white shadow-xl min-h-[320px] md:min-h-[280px]"
+          >
+            <div className="absolute -top-24 right-10 h-56 w-56 rounded-full bg-sky-500/30 blur-3xl" />
+            <div className="absolute bottom-0 left-0 h-48 w-48 -translate-x-1/3 translate-y-1/3 rounded-full bg-sky-600/20 blur-3xl" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.25)_0%,_rgba(15,23,42,0.92)_45%,_rgba(10,12,15,0.98)_100%)]" />
+            <div className="relative z-10 flex flex-col gap-8 px-5 py-6 md:flex-row md:items-start md:justify-between md:px-6 md:py-7 lg:gap-10 lg:px-8">
+              <div className="flex flex-col items-center gap-6 text-center md:flex-1 md:items-start md:text-left">
+                <div className="flex w-full flex-col items-center gap-4 md:flex-row md:items-start md:gap-6">
+                  <div className="flex justify-center md:justify-start">
+                    <Avatar className="h-20 w-20 ring-4 ring-white/80 ring-offset-4 ring-offset-slate-900 shadow-2xl md:h-24 md:w-24">
+                      <AvatarImage src={profileAvatarUrl ?? ""} />
+                      <AvatarFallback className="text-2xl">
+                        {profile.username[0].toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </div>
+                  <div className="flex w-full flex-1 flex-col items-center gap-3 text-center md:items-start md:text-left">
+                    <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-100 shadow-sm md:mt-0">
+                      <Sparkles className="h-3 w-3" aria-hidden="true" />
                       {isOwnProfile ? "Your angler profile" : "Angler spotlight"}
                     </span>
-                  </div>
-                  <h1 className="mt-4 text-3xl font-bold text-white md:text-4xl drop-shadow-sm">{profile.username}</h1>
-                  {isEditing && isOwnProfile ? (
-                    <div className="mt-4 space-y-3">
-                      <Textarea
-                        value={editedBio}
-                        onChange={(e) => setEditedBio(e.target.value)}
-                        placeholder="Tell us about yourself..."
-                        rows={3}
-                        className="bg-white/90 text-foreground"
-                      />
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={handleUpdateBio}>
-                          Save
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="mt-4 text-base text-white/85">
-                        {profile.bio || "No bio yet – share your fishing story and favourite waters."}
-                      </p>
-                      <div className="mt-5 flex flex-wrap items-center justify-center gap-3 md:justify-start">
-                        {isOwnProfile ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="rounded-full bg-white/20 text-white hover:bg-white/30"
-                              onClick={() => setIsEditing(true)}
-                            >
-                              Edit bio
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="rounded-full border-transparent bg-white/90 text-slate-900 hover:bg-white"
-                              asChild
-                            >
-                              <Link to="/insights">View my stats</Link>
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant={isFollowing ? "secondary" : "ocean"}
-                            className="rounded-full"
-                            onClick={handleToggleFollow}
-                            disabled={followLoading}
-                          >
-                            {followLoading ? "Updating…" : isFollowing ? "Following" : "Follow angler"}
+                    <h1 className="text-3xl font-bold text-white leading-tight line-clamp-2 md:text-4xl md:leading-snug md:line-clamp-none">
+                      {profile.username}
+                    </h1>
+                    {isEditing && isOwnProfile ? (
+                      <div className="space-y-3 rounded-xl border border-white/10 bg-white/10 p-4 backdrop-blur">
+                        <Textarea
+                          value={editedBio}
+                          onChange={(e) => setEditedBio(e.target.value)}
+                          placeholder="Tell us about yourself..."
+                          rows={3}
+                          className="bg-white text-slate-900"
+                        />
+                        <div className="flex flex-wrap gap-3">
+                          <Button size="sm" onClick={handleUpdateBio} className="h-9 rounded-full bg-sky-500 text-white hover:bg-sky-600">
+                            Save
                           </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full border-transparent bg-white/90 text-slate-900 hover:bg-white"
-                          onClick={() => navigate("/feed")}
-                        >
-                          View community feed
-                        </Button>
+                          <Button size="sm" variant="outline" className="h-9 rounded-full border-white/40 bg-white/10 text-white hover:bg-white/20" onClick={() => setIsEditing(false)}>
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
+                    ) : (
+                      <p className="text-sm leading-relaxed text-slate-100/80 line-clamp-3 md:line-clamp-none">
+                        {profileBio}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex w-full flex-wrap justify-center gap-3 md:justify-start md:gap-4">
+                  {isOwnProfile && (
+                    <Button
+                      className="h-10 rounded-full bg-sky-500 px-6 text-sm font-semibold text-white hover:bg-sky-600"
+                      onClick={() => navigate("/add-catch")}
+                    >
+                      Add catch
+                    </Button>
+                  )}
+
+                  {isOwnProfile ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="h-10 rounded-full border-white/40 bg-white/10 px-5 text-sm text-white hover:bg-white/20"
+                        onClick={() => setIsEditing(true)}
+                      >
+                        Status
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-10 rounded-full border-white/40 bg-white/10 px-5 text-sm text-white hover:bg-white/20"
+                        asChild
+                      >
+                        <Link to="/insights">View my stats</Link>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-10 rounded-full border-white/40 bg-white/10 px-5 text-sm text-white hover:bg-white/20"
+                        asChild
+                      >
+                        <Link to="/settings/profile" className="flex items-center gap-2">
+                          <Settings className="h-4 w-4" />
+                          Account settings
+                        </Link>
+                      </Button>
                     </>
+                  ) : (
+                    <Button
+                      className="h-10 rounded-full bg-sky-500 px-5 text-sm font-semibold text-white hover:bg-sky-600"
+                      onClick={handleToggleFollow}
+                      disabled={followLoading}
+                    >
+                      {followLoading ? "Updating…" : isFollowing ? "Following" : "Follow angler"}
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    className="h-10 rounded-full border-white/40 bg-white/10 px-5 text-sm text-white hover:bg-white/20"
+                    onClick={() => navigate("/feed")}
+                  >
+                    View community feed
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid w-full grid-cols-2 gap-4 md:flex-none md:w-56 md:grid-cols-1 lg:w-60">
+                <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+                  <p className="text-xs uppercase tracking-wide text-white/70">Total catches</p>
+                  <p className="mt-2 text-2xl font-semibold">{catches.length}</p>
+                  {catches.length === 0 && (
+                    <p className="text-xs text-white/60">Log your first catch to start your profile.</p>
                   )}
                 </div>
-                <div className="flex flex-col gap-4 text-center md:text-right">
-                  <div className="rounded-2xl border border-white/30 bg-white/10 px-5 py-4 text-white backdrop-blur">
-                    <p className="text-xs uppercase tracking-wide text-white/70">Total catches</p>
-                    <p className="text-3xl font-bold">{catches.length}</p>
-                  </div>
-                  <div className="rounded-2xl border border-white/30 bg-white/10 px-5 py-4 text-white backdrop-blur">
-                    <p className="text-xs uppercase tracking-wide text-white/70">Followers</p>
-                    <p className="text-2xl font-semibold">{followersCount}</p>
-                  </div>
+                <div className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
+                  <p className="text-xs uppercase tracking-wide text-white/70">Followers</p>
+                  <p className="mt-2 text-2xl font-semibold">{totalFollowers}</p>
+                  {totalFollowers === 0 && (
+                    <p className="text-xs text-white/60">Followers will appear once anglers subscribe to you.</p>
+                  )}
                 </div>
               </div>
-            </CardContent>
-          </div>
-        </Card>
+            </div>
+          </section>
 
-        <Card className="mb-8">
-          <CardContent className="py-6">
-            <h2 className="text-xl font-semibold mb-4">Angler stats</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="rounded-2xl border border-border/60 bg-card/70 p-5 shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">
-                    <Fish className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Total catches</p>
-                    <p className="text-2xl font-bold">{overallStats.total}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-border/60 bg-card/70 p-5 shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">
-                    <BarChart3 className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Average rating</p>
-                    <p className="text-2xl font-bold">{overallStats.avgRating}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-border/60 bg-card/70 p-5 shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">
-                    <Trophy className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Heaviest catch</p>
-                    <p className="text-2xl font-bold">
-                      {overallStats.heaviestCatch
-                        ? formatWeight(overallStats.heaviestCatch.weight, overallStats.heaviestCatch.weight_unit)
-                        : "-"}
-                    </p>
-                    {overallStats.heaviestCatch?.species && (
-                      <p className="text-xs text-muted-foreground">
-                        {formatSpecies(overallStats.heaviestCatch.species)}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">Angler stats</h2>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {statsCards.map((card) => (
+                <div
+                  key={card.label}
+                  className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={statIconClasses}>{card.icon}</div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {card.label}
                       </p>
-                    )}
+                      <p className="text-2xl font-bold text-slate-900">{card.value}</p>
+                    </div>
                   </div>
+                  {card.hint && (
+                    <p className="mt-3 text-xs text-slate-500">{card.hint}</p>
+                  )}
                 </div>
-              </div>
-              <div className="rounded-2xl border border-border/60 bg-card/70 p-5 shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">
-                    <UsersIcon className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Following</p>
-                    <p className="text-2xl font-bold">{overallStats.followingCount}</p>
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-xl border border-dashed border-border/60 bg-card/50 p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Top species</p>
-                <p className="text-lg font-semibold">
-                  {overallStats.topSpecies
-                    ? `${formatSpecies(overallStats.topSpecies.species)} (${overallStats.topSpecies.count})`
-                    : "No catches yet"}
-                </p>
-              </div>
-              <div className="rounded-xl border border-dashed border-border/60 bg-card/50 p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Followers</p>
-                <p className="text-lg font-semibold">{followersCount}</p>
-              </div>
-            </div>
-            {overallStats.latestCatch && (
-              <div className="mt-6 flex flex-col sm:flex-row gap-4 rounded-xl border border-border/60 bg-card/60 p-4">
-                <img
-                  src={
-                    overallStats.latestCatch.image_url ||
-                    "https://via.placeholder.com/400x300.png?text=Catch"
-                  }
-                  alt={overallStats.latestCatch.title}
-                  className="h-32 w-full sm:w-48 object-cover rounded-lg"
-                />
-                <div className="flex-1">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Latest catch</p>
-                  <h3 className="text-lg font-semibold text-foreground">{overallStats.latestCatch.title}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Logged {new Date(overallStats.latestCatch.created_at).toLocaleDateString("en-GB")}
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                    <span>
-                      Weight{" "}
-                      <span className="font-semibold text-foreground">
-                        {formatWeight(overallStats.latestCatch.weight, overallStats.latestCatch.weight_unit)}
-                      </span>
-                    </span>
-                    {overallStats.latestCatch.species && (
-                      <span>
-                        Species{" "}
-                        <span className="font-semibold text-foreground">
-                          {formatSpecies(overallStats.latestCatch.species)}
-                        </span>
-                      </span>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-primary"
-                      onClick={() => navigate(`/catch/${overallStats.latestCatch?.id}`)}
-                    >
-                      View catch
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          </section>
 
-        <Card className="mb-8 border-none bg-transparent shadow-none">
-          <CardContent className="relative overflow-hidden rounded-3xl border border-border/60 bg-gradient-to-br from-background/80 via-background/70 to-muted/60 px-6 py-6 md:px-10">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">
                 {isOwnProfile ? "Anglers you follow" : `${profile.username} follows`}
               </h2>
               {isOwnProfile && followingProfiles.length > 0 && (
-                <span className="text-sm text-muted-foreground">
-                  {followingProfiles.length} angler{followingProfiles.length === 1 ? "" : "s"}
-                </span>
+                <span className="text-sm text-slate-500">{followingProfiles.length} angler{followingProfiles.length === 1 ? "" : "s"}</span>
               )}
             </div>
             {followingProfiles.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 {followingProfiles.map((angler) => (
                   <Link
                     key={angler.id}
                     to={`/profile/${angler.id}`}
-                    className="flex items-center gap-3 rounded-2xl border border-primary/10 bg-card/80 p-4 transition hover:-translate-y-1 hover:border-primary hover:shadow-xl"
+                    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
                   >
-                    <Avatar className="w-12 h-12">
-                      <AvatarImage src={angler.avatar_url || ""} />
-                      <AvatarFallback>{angler.username[0]?.toUpperCase() ?? "A"}</AvatarFallback>
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage
+                        src={resolveAvatarUrl({ path: angler.avatar_path, legacyUrl: angler.avatar_url }) ?? ""}
+                      />
+                      <AvatarFallback>{angler.username?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>
                     </Avatar>
-                    <div className="space-y-1">
-                      <p className="font-semibold text-foreground">{angler.username}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{angler.username}</p>
+                      <p className="truncate text-xs text-slate-500">
                         {angler.bio || "No bio yet"}
                       </p>
                     </div>
@@ -617,49 +535,81 @@ const formatWeight = (weight: number | null, unit: string | null) => {
                 ))}
               </div>
             ) : (
-              <p className="rounded-2xl border border-dashed border-border/50 bg-card/60 p-6 text-sm text-muted-foreground text-center">
-                {isOwnProfile
-                  ? "You’re not following any anglers yet. Explore the feed to find your next inspiration."
-                  : `${profile.username} isn’t following anyone yet.`}
-              </p>
+              <div className="rounded-xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+                <h3 className="text-base font-semibold text-slate-900">You’re not following anyone yet</h3>
+                <p className="mt-2 text-sm text-slate-500">
+                  Browse the feed and follow anglers to see their PBs here.
+                </p>
+                <Button
+                  className="mt-4 h-10 rounded-full bg-sky-500 px-5 text-sm font-semibold text-white hover:bg-sky-600"
+                  onClick={() => navigate("/feed")}
+                >
+                  Go to feed
+                </Button>
+              </div>
             )}
-          </CardContent>
-        </Card>
+          </section>
 
-        <h2 className="text-2xl font-bold mb-6">
-          {isOwnProfile ? "Your Catches" : `${profile.username}'s Catches`}
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {catches.map((catchItem) => (
-            <Card
-              key={catchItem.id}
-              className="cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => navigate(`/catch/${catchItem.id}`)}
-            >
-              <CardContent className="p-0">
-                <img
-                  src={catchItem.image_url}
-                  alt={catchItem.title}
-                  className="w-full h-48 object-cover rounded-t-lg"
-                />
-                <div className="p-4">
-                  <h3 className="font-semibold mb-2">{catchItem.title}</h3>
-                  <div className="flex items-center gap-1">
-                    <Star className="w-4 h-4 text-accent" />
-                    <span className="text-sm font-medium">
-                      {calculateAverageRating(catchItem.ratings)}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">
+                {isOwnProfile ? "Your catches" : `${profile.username}'s catches`}
+              </h2>
+              <span className="text-sm text-slate-500">{catches.length} logged</span>
+            </div>
+            {catches.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+                <Fish className="h-12 w-12 text-slate-400" />
+                <h3 className="text-base font-semibold text-slate-900">No catches yet</h3>
+                <p className="text-sm text-slate-500">Add your first session to start building your reel.</p>
+                {isOwnProfile ? (
+                  <Button
+                    className="h-10 rounded-full bg-sky-500 px-5 text-sm font-semibold text-white hover:bg-sky-600"
+                    onClick={() => navigate("/add-catch")}
+                  >
+                    Add catch
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="h-10 rounded-full border-slate-300 px-5 text-sm text-slate-700 hover:bg-slate-100"
+                    onClick={() => navigate("/feed")}
+                  >
+                    Browse feed
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {catches.map((catchItem) => (
+                  <Card
+                    key={catchItem.id}
+                    className="overflow-hidden border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+                    onClick={() => navigate(`/catch/${catchItem.id}`)}
+                  >
+                    <CardContent className="p-0">
+                      <img
+                        src={catchItem.image_url}
+                        alt={catchItem.title}
+                        className="h-48 w-full object-cover"
+                      />
+                      <div className="space-y-3 p-4">
+                        <p className="truncate text-sm font-semibold text-slate-900">{catchItem.title}</p>
+                        <p className="truncate text-xs text-slate-500">
+                          {catchItem.species ? formatSpecies(catchItem.species) : "Species unknown"}
+                        </p>
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                          <span>{new Date(catchItem.created_at).toLocaleDateString("en-GB")}</span>
+                          <span>{formatWeight(catchItem.weight, catchItem.weight_unit)}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
-        {catches.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">No catches yet</p>
-          </div>
-        )}
       </div>
     </div>
   );

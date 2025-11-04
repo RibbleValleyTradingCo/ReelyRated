@@ -14,6 +14,7 @@ import {
   type SearchCatch,
   type SearchProfile,
 } from "@/lib/search";
+import { resolveAvatarUrl } from "@/lib/storage";
 
 const Section = ({
   title,
@@ -54,7 +55,7 @@ const SearchPage = () => {
     }
 
     supabase
-      .from("profiles_followers")
+      .from("profile_follows")
       .select("following_id")
       .eq("follower_id", user.id)
       .then(({ data, error }) => {
@@ -207,7 +208,14 @@ const SearchPage = () => {
                           className="flex items-center gap-4 p-4 transition hover:bg-muted"
                         >
                           <Avatar className="h-12 w-12">
-                            <AvatarImage src={profile.avatar_url ?? ""} />
+                            <AvatarImage
+                              src={
+                                resolveAvatarUrl({
+                                  path: profile.avatar_path,
+                                  legacyUrl: profile.avatar_url,
+                                }) ?? ""
+                              }
+                            />
                             <AvatarFallback>
                               {profile.username?.[0]?.toUpperCase() ?? "A"}
                             </AvatarFallback>

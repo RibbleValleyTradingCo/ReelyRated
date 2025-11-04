@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
+
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/components/AuthProvider";
 import { isAdminUser } from "@/lib/admin";
@@ -7,55 +10,176 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatDistanceToNow } from "date-fns";
-import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+type SeverityOption = "warning" | "temporary_suspension" | "permanent_ban";
+type ReportStatus = "open" | "resolved" | "dismissed";
+
+interface Reporter {
+  id: string;
+  username: string | null;
+  avatar_path: string | null;
+  avatar_url: string | null;
+}
 
 interface ReportRow {
   id: string;
   target_type: string;
   target_id: string;
   reason: string;
+  status: ReportStatus;
   created_at: string;
-  reporter: {
-    id: string;
-    username: string | null;
-    avatar_url: string | null;
-  } | null;
+  reporter: Reporter | null;
 }
+
+interface ModerationLogEntry {
+  id: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  reason: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
+  admin: { id: string | null; username: string | null } | null;
+}
+
+interface UserWarningEntry {
+  id: string;
+  reason: string;
+  severity: SeverityOption;
+  duration_hours: number | null;
+  created_at: string;
+  admin: { id: string | null; username: string | null } | null;
+}
+
+interface ReportDetails {
+  targetUserId: string | null;
+  parentCatchId: string | null;
+  deletedAt: string | null;
+  warnCount: number;
+  moderationStatus: string;
+  suspensionUntil: string | null;
+  userWarnings: UserWarningEntry[];
+  modHistory: ModerationLogEntry[];
+  targetProfile: { id: string; username: string | null } | null;
+  targetMissing: boolean;
+}
+
+interface WarningQueryRow {
+  id: string;
+  reason: string;
+  severity: string;
+  duration_hours: number | null;
+  created_at: string;
+  admin: { id: string | null; username: string | null } | null;
+}
+
+interface ModerationLogQueryRow {
+  id: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  reason: string;
+  details: Record<string, unknown> | null;
+  created_at: string;
+  admin: { id: string | null; username: string | null } | null;
+}
+
+const severityOptions: { value: SeverityOption; label: string }[] = [
+  { value: "warning", label: "Warning" },
+  { value: "temporary_suspension", label: "Temporary suspension" },
+  { value: "permanent_ban", label: "Permanent ban" },
+];
+
+const statusBadgeVariants: Record<ReportStatus, string> = {
+  open: "bg-red-100 text-red-800",
+  resolved: "bg-green-100 text-green-800",
+  dismissed: "bg-yellow-100 text-yellow-800",
+};
+
+const formatRelative = (value: string | null | undefined) => {
+  if (!value) return "N/A";
+  return formatDistanceToNow(new Date(value), { addSuffix: true });
+};
 
 const AdminReports = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "catch" | "comment" | "profile">("all");
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  const [selectedReport, setSelectedReport] = useState<ReportRow | null>(null);
+  const [details, setDetails] = useState<ReportDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showWarnDialog, setShowWarnDialog] = useState(false);
+  const [warnReason, setWarnReason] = useState("");
+  const [warnSeverity, setWarnSeverity] = useState<SeverityOption>("warning");
+  const [warnDuration, setWarnDuration] = useState("24");
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   useEffect(() => {
-    if (!loading) {
-      if (!isAdminUser(user?.id)) {
-        toast.error("Admin access required");
-        navigate("/feed");
-      }
+    if (!loading && !isAdminUser(user?.id)) {
+      toast.error("Admin access required");
+      navigate("/feed");
     }
   }, [loading, user, navigate]);
 
-  const fetchReports = useCallback(async (options: { silently?: boolean } = {}) => {
-    if (!user || !isAdminUser(user.id)) return;
-    if (!options.silently) {
-      setIsLoading(true);
-    }
-    const { data, error } = await supabase
-      .from("reports")
-      .select(
-        "id, target_type, target_id, reason, created_at, reporter:reporter_id (id, username, avatar_url)"
-      )
-      .order("created_at", { ascending: false });
+  const fetchReports = useCallback(
+    async (options: { silently?: boolean } = {}) => {
+      if (!user || !isAdminUser(user.id)) return;
+      if (!options.silently) {
+        setIsLoading(true);
+      }
 
-    if (!error && data) {
-      setReports(data as unknown as ReportRow[]);
-    }
-    setIsLoading(false);
-  }, [user]);
+      const { data, error } = await supabase
+        .from("reports")
+        .select(
+          "id, target_type, target_id, reason, status, created_at, reporter:reporter_id (id, username, avatar_path, avatar_url)"
+        )
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        toast.error("Unable to load reports");
+      } else if (data) {
+        setReports(data as unknown as ReportRow[]);
+      }
+
+      setIsLoading(false);
+    },
+    [user]
+  );
 
   useEffect(() => {
     if (isAdminUser(user?.id)) {
@@ -108,13 +232,216 @@ const AdminReports = () => {
     };
   }, [fetchReports, user]);
 
-  const filteredReports = useMemo(() => {
-    if (filter === "all") return reports;
-    return reports.filter((report) => report.target_type === filter);
-  }, [reports, filter]);
+  useEffect(() => {
+    if (!selectedReport) return;
+
+    const updated = reports.find((report) => report.id === selectedReport.id);
+    if (!updated) {
+      setSelectedReport(null);
+      setDetails(null);
+      return;
+    }
+
+    if (
+      updated.status !== selectedReport.status ||
+      updated.reason !== selectedReport.reason ||
+      updated.target_type !== selectedReport.target_type ||
+      updated.target_id !== selectedReport.target_id
+    ) {
+      setSelectedReport(updated);
+    }
+  }, [reports, selectedReport]);
+
+  const fetchReportDetails = useCallback(
+    async (report: ReportRow): Promise<ReportDetails> => {
+      if (!user || !isAdminUser(user.id)) {
+        throw new Error("Admin privileges required");
+      }
+
+      let targetUserId: string | null = null;
+      let parentCatchId: string | null = null;
+      let deletedAt: string | null = null;
+      let targetMissing = false;
+      let targetProfile: { id: string; username: string | null } | null = null;
+      let warnCount = 0;
+      let moderationStatus = "active";
+      let suspensionUntil: string | null = null;
+
+      if (report.target_type === "catch") {
+        const { data, error } = await supabase
+          .from("catches")
+          .select("id, user_id, deleted_at")
+          .eq("id", report.target_id)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (data) {
+          parentCatchId = data.id;
+          targetUserId = data.user_id ?? null;
+          deletedAt = data.deleted_at ?? null;
+        } else {
+          targetMissing = true;
+          parentCatchId = report.target_id;
+        }
+      } else if (report.target_type === "comment") {
+        const { data, error } = await supabase
+          .from("catch_comments")
+          .select("id, catch_id, user_id, deleted_at")
+          .eq("id", report.target_id)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (data) {
+          parentCatchId = data.catch_id;
+          targetUserId = data.user_id ?? null;
+          deletedAt = data.deleted_at ?? null;
+        } else {
+          targetMissing = true;
+          parentCatchId = null;
+        }
+      } else {
+        targetUserId = report.target_id;
+        parentCatchId = null;
+      }
+
+      if (targetUserId) {
+        const { data: profileRow, error: profileError } = await supabase
+          .from("profiles")
+          .select("id, username, warn_count, moderation_status, suspension_until")
+          .eq("id", targetUserId)
+          .maybeSingle();
+
+        if (profileError) throw profileError;
+
+        if (profileRow) {
+          targetProfile = { id: profileRow.id, username: profileRow.username };
+          warnCount = profileRow.warn_count ?? 0;
+          moderationStatus = profileRow.moderation_status ?? "active";
+          suspensionUntil = profileRow.suspension_until ?? null;
+        } else {
+          targetMissing = true;
+        }
+      }
+
+      const warningsResponse = targetUserId
+        ? await supabase
+            .from("user_warnings")
+            .select("id, reason, severity, duration_hours, created_at, admin:admin_id (id, username)")
+            .eq("user_id", targetUserId)
+            .order("created_at", { ascending: false })
+        : { data: [] as unknown[], error: null };
+
+      if (warningsResponse.error) throw warningsResponse.error;
+
+      const historyResponse = await supabase
+        .from("moderation_log")
+        .select("id, action, target_type, target_id, reason, details, created_at, admin:admin_id (id, username)")
+        .eq("target_id", report.target_id)
+        .order("created_at", { ascending: false });
+
+      if (historyResponse.error) throw historyResponse.error;
+
+      const warningRows = (warningsResponse.data ?? []) as WarningQueryRow[];
+      const historyRows = (historyResponse.data ?? []) as ModerationLogQueryRow[];
+
+      const userWarnings = warningRows.map((entry) => {
+        const severityValue = entry.severity as SeverityOption;
+        const normalizedSeverity = severityOptions.some((option) => option.value === severityValue)
+          ? severityValue
+          : "warning";
+
+        return {
+          id: entry.id,
+          reason: entry.reason,
+          severity: normalizedSeverity,
+          duration_hours: entry.duration_hours ?? null,
+          created_at: entry.created_at,
+          admin: entry.admin ?? null,
+        } satisfies UserWarningEntry;
+      });
+
+      const modHistory = historyRows.map((entry) => ({
+        id: entry.id,
+        action: entry.action,
+        target_type: entry.target_type,
+        target_id: entry.target_id,
+        reason: entry.reason,
+        details: entry.details ?? null,
+        created_at: entry.created_at,
+        admin: entry.admin ?? null,
+      }));
+
+      return {
+        targetUserId,
+        parentCatchId,
+        deletedAt,
+        warnCount: warnCount || userWarnings.length,
+        moderationStatus,
+        suspensionUntil,
+        userWarnings,
+        modHistory,
+        targetProfile,
+        targetMissing,
+      };
+    },
+    [user]
+  );
+
+  const handleSelectReport = useCallback(
+    async (report: ReportRow) => {
+      setSelectedReport(report);
+      setDetails(null);
+      setWarnReason("");
+      setWarnSeverity("warning");
+      setWarnDuration("24");
+      setShowDeleteConfirm(false);
+      setShowWarnDialog(false);
+
+      if (!isAdminUser(user?.id)) return;
+
+      setDetailsLoading(true);
+      try {
+        const context = await fetchReportDetails(report);
+        setDetails(context);
+      } catch (error) {
+        console.error(error);
+        toast.error("Unable to load moderation details");
+      } finally {
+        setDetailsLoading(false);
+      }
+    },
+    [fetchReportDetails, user]
+  );
+
+  const handleUpdateStatus = useCallback(
+    async (reportId: string, status: ReportStatus) => {
+      if (!user || !isAdminUser(user.id)) return;
+      setUpdatingId(reportId);
+
+      const { error } = await supabase
+        .from("reports")
+        .update({ status })
+        .eq("id", reportId);
+
+      if (error) {
+        toast.error("Unable to update report status");
+      } else {
+        setReports((prev) =>
+          prev.map((report) => (report.id === reportId ? { ...report, status } : report))
+        );
+        setSelectedReport((prev) => (prev && prev.id === reportId ? { ...prev, status } : prev));
+        toast.success(`Report marked as ${status}`);
+      }
+
+      setUpdatingId(null);
+    },
+    [user]
+  );
 
   const handleViewTarget = useCallback(
-    async (report: ReportRow) => {
+    async (report: ReportRow, catchIdFromDetails?: string | null) => {
       if (report.target_type === "catch") {
         navigate(`/catch/${report.target_id}`);
         return;
@@ -126,6 +453,12 @@ const AdminReports = () => {
       }
 
       if (report.target_type === "comment") {
+        const catchId = catchIdFromDetails;
+        if (catchId) {
+          navigate(`/catch/${catchId}`);
+          return;
+        }
+
         const { data, error } = await supabase
           .from("catch_comments")
           .select("catch_id")
@@ -142,6 +475,149 @@ const AdminReports = () => {
     },
     [navigate]
   );
+
+  const handleDeleteContent = useCallback(async () => {
+    if (!selectedReport || !details) return;
+    if (!["catch", "comment"].includes(selectedReport.target_type)) return;
+    if (details.targetMissing) {
+      toast.error("Content record not found");
+      return;
+    }
+
+    setIsProcessingAction(true);
+    try {
+      const deleteReason = selectedReport.reason || "Moderator content removal";
+
+      if (selectedReport.target_type === "catch") {
+        const { error } = await supabase.rpc("admin_delete_catch", {
+          catch_id: selectedReport.target_id,
+          reason: deleteReason,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.rpc("admin_delete_comment", {
+          comment_id: selectedReport.target_id,
+          reason: deleteReason,
+        });
+        if (error) throw error;
+      }
+
+      toast.success("Content deleted and user notified");
+      await handleUpdateStatus(selectedReport.id, "resolved");
+      await fetchReports({ silently: true });
+      const refreshed = await fetchReportDetails(selectedReport);
+      setDetails(refreshed);
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to delete content");
+    } finally {
+      setIsProcessingAction(false);
+      setShowDeleteConfirm(false);
+    }
+  }, [details, fetchReportDetails, fetchReports, handleUpdateStatus, selectedReport]);
+
+  const handleRestoreContent = useCallback(async () => {
+    if (!selectedReport || !details) return;
+    if (!details.deletedAt) return;
+
+    if (!["catch", "comment"].includes(selectedReport.target_type)) return;
+
+    setIsProcessingAction(true);
+    try {
+      if (selectedReport.target_type === "catch") {
+        const { error } = await supabase.rpc("admin_restore_catch", {
+          catch_id: selectedReport.target_id,
+          reason: "Decision overturned",
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.rpc("admin_restore_comment", {
+          comment_id: selectedReport.target_id,
+          reason: "Decision overturned",
+        });
+        if (error) throw error;
+      }
+
+      toast.success("Content restored");
+      await fetchReports({ silently: true });
+      const refreshed = await fetchReportDetails(selectedReport);
+      setDetails(refreshed);
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to restore content");
+    } finally {
+      setIsProcessingAction(false);
+    }
+  }, [details, fetchReportDetails, fetchReports, selectedReport]);
+
+  const handleWarnUser = useCallback(async () => {
+    if (!selectedReport || !details || !details.targetUserId) {
+      toast.error("Target user unavailable for moderation");
+      return;
+    }
+
+    const trimmedReason = warnReason.trim();
+    if (!trimmedReason) {
+      toast.error("Please provide a reason for the warning");
+      return;
+    }
+
+    let duration: number | null = null;
+    if (warnSeverity === "temporary_suspension") {
+      const parsed = parseInt(warnDuration, 10);
+      if (Number.isNaN(parsed) || parsed <= 0) {
+        toast.error("Enter a valid suspension duration in hours");
+        return;
+      }
+      duration = parsed;
+    }
+
+    setIsProcessingAction(true);
+    try {
+      const payload: Record<string, unknown> = {
+        user_id: details.targetUserId,
+        reason: trimmedReason,
+        severity: warnSeverity,
+      };
+      if (duration !== null) {
+        payload.duration_hours = duration;
+      }
+
+      const { error } = await supabase.rpc("admin_warn_user", payload);
+      if (error) throw error;
+
+      toast.success("User moderation action recorded");
+      setWarnReason("");
+      setWarnSeverity("warning");
+      setWarnDuration("24");
+      setShowWarnDialog(false);
+
+      await handleUpdateStatus(selectedReport.id, "resolved");
+      await fetchReports({ silently: true });
+      const refreshed = await fetchReportDetails(selectedReport);
+      setDetails(refreshed);
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to submit warning");
+    } finally {
+      setIsProcessingAction(false);
+    }
+  }, [details, fetchReportDetails, fetchReports, handleUpdateStatus, selectedReport, warnDuration, warnReason, warnSeverity]);
+
+  const filteredReports = useMemo(() => {
+    if (filter === "all") return reports;
+    return reports.filter((report) => report.target_type === filter);
+  }, [reports, filter]);
+
+  const handleCloseDetails = () => {
+    setSelectedReport(null);
+    setDetails(null);
+    setShowDeleteConfirm(false);
+    setShowWarnDialog(false);
+    setWarnReason("");
+    setWarnSeverity("warning");
+    setWarnDuration("24");
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted">
@@ -186,36 +662,311 @@ const AdminReports = () => {
             ) : filteredReports.length === 0 ? (
               <p className="text-sm text-muted-foreground">No reports yet.</p>
             ) : (
-              filteredReports.map((report) => (
-                <div key={report.id} className="rounded-lg border border-border/60 bg-card/70 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <Badge variant="secondary" className="uppercase tracking-wide">
-                        {report.target_type}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(report.created_at), { addSuffix: true })}
-                      </span>
+              filteredReports.map((report) => {
+                const isSelected = selectedReport?.id === report.id;
+                const currentDetails = isSelected ? details : null;
+                const isStatusUpdating = updatingId === report.id;
+                const canDelete =
+                  isSelected &&
+                  currentDetails &&
+                  !currentDetails.targetMissing &&
+                  ["catch", "comment"].includes(report.target_type);
+                const canWarn = Boolean(currentDetails?.targetUserId);
+                const canRestore =
+                  isSelected &&
+                  currentDetails &&
+                  Boolean(currentDetails.deletedAt) &&
+                  ["catch", "comment"].includes(report.target_type);
+
+                return (
+                  <div key={report.id} className="rounded-lg border border-border/60 bg-card/70 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Badge variant="secondary" className="uppercase tracking-wide">
+                          {report.target_type}
+                        </Badge>
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeVariants[report.status]}`}>
+                          {report.status.toUpperCase()}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatRelative(report.created_at)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-primary"
+                          onClick={() => void handleViewTarget(report, currentDetails?.parentCatchId)}
+                        >
+                          View target
+                        </Button>
+                        {isSelected ? (
+                          <Button variant="ghost" size="sm" onClick={handleCloseDetails}>
+                            Close
+                          </Button>
+                        ) : (
+                          <Button variant="outline" size="sm" onClick={() => void handleSelectReport(report)}>
+                            Moderation actions
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-primary"
-                      onClick={() => void handleViewTarget(report)}
-                    >
-                      View target
-                    </Button>
+                    <p className="mt-3 text-sm text-foreground whitespace-pre-wrap">{report.reason}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Reported by {report.reporter?.username ?? report.reporter?.id ?? "Unknown"}
+                    </p>
+
+                    {isSelected && (
+                      <div className="mt-4 space-y-3">
+                        {detailsLoading ? (
+                          <p className="text-sm text-muted-foreground">Loading moderation context…</p>
+                        ) : currentDetails ? (
+                          <>
+                            {currentDetails.targetProfile && (
+                              <div className="text-sm text-muted-foreground">
+                                Target user: {currentDetails.targetProfile.username ?? currentDetails.targetProfile.id}
+                              </div>
+                            )}
+
+                            {currentDetails.targetMissing && (
+                              <div className="rounded border border-dashed border-destructive/60 bg-destructive/10 p-3 text-sm text-destructive">
+                                The reported content is no longer available.
+                              </div>
+                            )}
+
+                            {currentDetails.deletedAt && (
+                              <div className="rounded bg-red-50 p-3 text-sm text-red-700">
+                                Content deleted {formatRelative(currentDetails.deletedAt)}.
+                              </div>
+                            )}
+
+                            <div className="flex items-center justify-between rounded bg-gray-50 p-3">
+                              <span className="font-medium">Status:</span>
+                              <span className={`rounded-full px-3 py-1 text-sm font-semibold ${statusBadgeVariants[report.status]}`}>
+                                {report.status.toUpperCase()}
+                              </span>
+                            </div>
+
+                            <div className="rounded bg-slate-50 p-3 text-sm">
+                              <div className="flex items-center justify-between">
+                                <span>Moderation status</span>
+                                <span className="font-medium capitalize">{currentDetails.moderationStatus}</span>
+                              </div>
+                              {currentDetails.suspensionUntil && (
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  Suspended until {new Date(currentDetails.suspensionUntil).toLocaleString()}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="space-y-2 rounded bg-blue-50 p-3">
+                              <div className="flex items-center justify-between text-sm">
+                                <span>Prior warnings</span>
+                                <span>
+                                  <strong>{currentDetails.warnCount}</strong>/3
+                                </span>
+                              </div>
+                              {currentDetails.userWarnings.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No prior warnings.</p>
+                              ) : (
+                                <div className="space-y-1 text-xs text-muted-foreground">
+                                  {currentDetails.userWarnings.map((warning) => (
+                                    <div key={warning.id} className="rounded border border-blue-200 bg-white/60 p-2">
+                                      <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-blue-700">
+                                        <span>{warning.severity.replace("_", " ")}</span>
+                                        <span>{formatRelative(warning.created_at)}</span>
+                                      </div>
+                                      <div className="mt-1 text-[13px] text-foreground">{warning.reason}</div>
+                                      {warning.duration_hours && (
+                                        <div className="text-[11px] text-muted-foreground">
+                                          Duration: {warning.duration_hours}h
+                                        </div>
+                                      )}
+                                      {warning.admin && (
+                                        <div className="text-[11px] text-muted-foreground">
+                                          By {warning.admin.username ?? warning.admin.id ?? "admin"}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              {canDelete && (
+                                <Button
+                                  onClick={() => setShowDeleteConfirm(true)}
+                                  disabled={isProcessingAction || isStatusUpdating}
+                                  className="px-3 py-2 bg-red-600 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                                >
+                                  Delete {report.target_type === "catch" ? "post" : "comment"}
+                                </Button>
+                              )}
+                              <Button
+                                onClick={() => setShowWarnDialog(true)}
+                                disabled={!canWarn || isProcessingAction || isStatusUpdating}
+                                className="px-3 py-2 bg-orange-600 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+                              >
+                                Warn user
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => void handleUpdateStatus(report.id, "dismissed")}
+                                disabled={isProcessingAction || isStatusUpdating || report.status === "dismissed"}
+                              >
+                                Dismiss
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => void handleUpdateStatus(report.id, "resolved")}
+                                disabled={isProcessingAction || isStatusUpdating || report.status === "resolved"}
+                              >
+                                Resolve
+                              </Button>
+                              {report.status !== "open" && (
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => void handleUpdateStatus(report.id, "open")}
+                                  disabled={isProcessingAction || isStatusUpdating}
+                                >
+                                  Reopen
+                                </Button>
+                              )}
+                            </div>
+
+                            {canRestore && (
+                              <Button
+                                onClick={() => void handleRestoreContent()}
+                                disabled={isProcessingAction}
+                                className="w-full px-3 py-2 bg-purple-600 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                              >
+                                Restore {report.target_type === "catch" ? "post" : "comment"}
+                              </Button>
+                            )}
+
+                            <details className="rounded bg-gray-50 p-3">
+                              <summary className="cursor-pointer font-medium">Moderation history</summary>
+                              <div className="mt-3 space-y-2 text-sm">
+                                {currentDetails.modHistory.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground">No moderation actions recorded.</p>
+                                ) : (
+                                  currentDetails.modHistory.map((entry) => (
+                                    <div key={entry.id} className="border-l-2 border-gray-300 pl-3">
+                                      <div className="font-medium">
+                                        {entry.admin?.username ?? entry.admin?.id ?? "Unknown admin"} – {entry.action}
+                                      </div>
+                                      <div className="text-gray-600">{entry.reason}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {formatRelative(entry.created_at)}
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </details>
+                          </>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Unable to load moderation context.</p>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <p className="mt-3 text-sm text-foreground whitespace-pre-wrap">{report.reason}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Reported by {report.reporter?.username ?? report.reporter?.id ?? "Unknown"}
-                  </p>
-                </div>
-              ))
+                );
+              })
             )}
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={(open) => !isProcessingAction && setShowDeleteConfirm(open)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this content?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action hides the content from all users and the owner will be notified.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isProcessingAction}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                void handleDeleteContent();
+              }}
+              disabled={isProcessingAction}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={showWarnDialog} onOpenChange={(open) => !isProcessingAction && setShowWarnDialog(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Warn user</DialogTitle>
+            <DialogDescription>
+              Issue a warning or suspension. This user currently has
+              {" "}
+              <strong>{details?.warnCount ?? 0}</strong>
+              {" "}/3 warnings.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="warn-reason">Reason</Label>
+              <Textarea
+                id="warn-reason"
+                value={warnReason}
+                onChange={(event) => setWarnReason(event.target.value)}
+                placeholder="Explain why this action is being taken"
+                rows={4}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="warn-severity">Severity</Label>
+              <Select value={warnSeverity} onValueChange={(value) => setWarnSeverity(value as SeverityOption)}>
+                <SelectTrigger id="warn-severity">
+                  <SelectValue placeholder="Select a severity" />
+                </SelectTrigger>
+                <SelectContent>
+                  {severityOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {warnSeverity === "temporary_suspension" && (
+              <div className="space-y-2">
+                <Label htmlFor="warn-duration">Suspension length (hours)</Label>
+                <Input
+                  id="warn-duration"
+                  type="number"
+                  min={1}
+                  value={warnDuration}
+                  onChange={(event) => setWarnDuration(event.target.value)}
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowWarnDialog(false)} disabled={isProcessingAction}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                void handleWarnUser();
+              }}
+              disabled={isProcessingAction}
+            >
+              Send warning
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -301,7 +301,10 @@ const AddCatch = () => {
         .order("date", { ascending: false })
         .limit(20);
 
-      if (!error && data) {
+      if (error) {
+        console.error("Failed to load sessions", error);
+        setSessions([]);
+      } else if (data) {
         setSessions(data as SessionOption[]);
       }
       setIsLoadingSessions(false);
@@ -593,7 +596,15 @@ const AddCatch = () => {
       navigate("/feed");
     } catch (error) {
       console.error("Error adding catch:", error);
-      toast.error("Failed to add catch. Please try again.");
+      const message =
+        error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string"
+          ? (error as { message: string }).message
+          : null;
+      if (message?.toLowerCase().includes("bucket")) {
+        toast.error("Unable to upload images. Please create a 'catches' storage bucket in Supabase.");
+      } else {
+        toast.error(message ?? "Failed to add catch. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }

@@ -9,6 +9,7 @@ import { Loader2, Search as SearchIcon } from "lucide-react";
 import { formatSpeciesName, searchAll, type SearchCatch, type SearchProfile } from "@/lib/search";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveAvatarUrl } from "@/lib/storage";
 
 export const GlobalSearch = () => {
   const navigate = useNavigate();
@@ -36,7 +37,7 @@ export const GlobalSearch = () => {
     }
 
     supabase
-      .from("profiles_followers")
+      .from("profile_follows")
       .select("following_id")
       .eq("follower_id", user.id)
       .then(({ data, error }) => {
@@ -184,7 +185,14 @@ export const GlobalSearch = () => {
                             className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-muted"
                           >
                             <Avatar className="h-8 w-8">
-                              <AvatarImage src={profile.avatar_url ?? ""} />
+                              <AvatarImage
+                                src={
+                                  resolveAvatarUrl({
+                                    path: profile.avatar_path,
+                                    legacyUrl: profile.avatar_url,
+                                  }) ?? ""
+                                }
+                              />
                               <AvatarFallback>{profile.username?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">

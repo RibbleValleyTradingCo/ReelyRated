@@ -14,6 +14,21 @@ alter table public.catches
   alter column water_type type text
   using water_type::text;
 
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'venues'
+      and column_name = 'water_type'
+  ) then
+    alter table public.venues
+      alter column water_type type text
+      using water_type::text;
+  end if;
+end$$;
+
 -- Clean up the obsolete enum now that the column is text-based
 drop type if exists public.water_type;
 

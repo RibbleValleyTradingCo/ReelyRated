@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UK_FISHERIES, getFreshwaterSpeciesLabel, normalizeVenueName } from "@/lib/freshwater-data";
 import { toast } from "sonner";
+import { resolveAvatarUrl } from "@/lib/storage";
 import { format } from "date-fns";
 
 type CustomFields = {
@@ -35,6 +36,7 @@ interface VenueCatch {
   hide_exact_spot: boolean | null;
   profiles: {
     username: string;
+    avatar_path: string | null;
     avatar_url: string | null;
   } | null;
 }
@@ -85,7 +87,7 @@ const VenueDetail = () => {
           caught_at,
           hide_exact_spot,
           conditions,
-          profiles:user_id (username, avatar_url)
+          profiles:user_id (username, avatar_path, avatar_url)
         `)
         .eq("location", normalized)
         .order("created_at", { ascending: false });
@@ -348,7 +350,14 @@ const VenueDetail = () => {
                         </div>
                         <div className="flex items-center gap-3 text-sm text-muted-foreground">
                           <Avatar className="h-8 w-8">
-                            <AvatarImage src={catchItem.profiles?.avatar_url ?? ""} />
+                            <AvatarImage
+                              src={
+                                resolveAvatarUrl({
+                                  path: catchItem.profiles?.avatar_path ?? null,
+                                  legacyUrl: catchItem.profiles?.avatar_url ?? null,
+                                }) ?? ""
+                              }
+                            />
                             <AvatarFallback>
                               {catchItem.profiles?.username?.[0]?.toUpperCase() ?? "A"}
                             </AvatarFallback>

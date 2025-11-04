@@ -10,6 +10,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { createNotification } from "@/lib/notifications";
 import ReportButton from "@/components/ReportButton";
 import { cn } from "@/lib/utils";
+import { resolveAvatarUrl } from "@/lib/storage";
 
 interface CatchCommentsProps {
   catchId: string;
@@ -25,6 +26,7 @@ interface CommentRow {
   user_id: string;
   profiles: {
     username: string;
+    avatar_path: string | null;
     avatar_url: string | null;
   } | null;
 }
@@ -32,6 +34,7 @@ interface CommentRow {
 interface MentionSuggestion {
   id: string;
   username: string;
+  avatar_path: string | null;
   avatar_url: string | null;
 }
 
@@ -67,7 +70,7 @@ export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId
     setIsLoading(true);
     const { data, error } = await supabase
       .from("catch_comments")
-      .select("id, body, created_at, user_id, profiles:user_id (username, avatar_url)")
+      .select("id, body, created_at, user_id, profiles:user_id (username, avatar_path, avatar_url)")
       .eq("catch_id", catchId)
       .order("created_at", { ascending: false });
 
@@ -95,7 +98,7 @@ export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId
     setMentionLoading(true);
     const query = supabase
       .from("profiles")
-      .select("id, username, avatar_url")
+      .select("id, username, avatar_path, avatar_url")
       .limit(5)
       .neq("id", currentUserId ?? "");
 
@@ -307,7 +310,14 @@ export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId
                           }}
                         >
                           <Avatar className="h-6 w-6">
-                            <AvatarImage src={suggestion.avatar_url ?? ""} />
+                            <AvatarImage
+                              src={
+                                resolveAvatarUrl({
+                                  path: suggestion.avatar_path,
+                                  legacyUrl: suggestion.avatar_url,
+                                }) ?? ""
+                              }
+                            />
                             <AvatarFallback>
                               {suggestion.username?.[0]?.toUpperCase() ?? "A"}
                             </AvatarFallback>
@@ -337,7 +347,14 @@ export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId
             {comments.map((comment) => (
               <div key={comment.id} className="flex gap-3">
                 <Avatar className="h-9 w-9">
-                  <AvatarImage src={comment.profiles?.avatar_url ?? ""} />
+                  <AvatarImage
+                    src={
+                      resolveAvatarUrl({
+                        path: comment.profiles?.avatar_path ?? null,
+                        legacyUrl: comment.profiles?.avatar_url ?? null,
+                      }) ?? ""
+                    }
+                  />
                   <AvatarFallback>
                     {comment.profiles?.username?.[0]?.toUpperCase() ?? "A"}
                   </AvatarFallback>

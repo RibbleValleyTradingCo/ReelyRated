@@ -415,32 +415,38 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_path: string | null
           avatar_url: string | null
           bio: string | null
           created_at: string
+          full_name: string | null
           id: string
           updated_at: string
           username: string
         }
         Insert: {
+          avatar_path?: string | null
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          full_name?: string | null
           id: string
           updated_at?: string
           username: string
         }
         Update: {
+          avatar_path?: string | null
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          full_name?: string | null
           id?: string
           updated_at?: string
           username?: string
         }
         Relationships: []
       }
-      profiles_followers: {
+      profile_follows: {
         Row: {
           follower_id: string
           following_id: string
@@ -458,20 +464,26 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "profiles_followers_follower_id_fkey"
+            foreignKeyName: "profile_follows_follower_id_fkey"
             columns: ["follower_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "profiles_followers_following_id_fkey"
+            foreignKeyName: "profile_follows_following_id_fkey"
             columns: ["following_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
+          }
         ]
+      }
+      profiles_followers: {
+        Row: Database["public"]["Tables"]["profile_follows"]["Row"]
+        Insert: Database["public"]["Tables"]["profile_follows"]["Insert"]
+        Update: Database["public"]["Tables"]["profile_follows"]["Update"]
+        Relationships: Database["public"]["Tables"]["profile_follows"]["Relationships"]
       }
       ratings: {
         Row: {

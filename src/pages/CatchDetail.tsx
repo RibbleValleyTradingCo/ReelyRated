@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,6 +43,7 @@ import { format } from "date-fns";
 import { getFreshwaterSpeciesLabel } from "@/lib/freshwater-data";
 import { CatchComments } from "@/components/CatchComments";
 import { createNotification } from "@/lib/notifications";
+import { resolveAvatarUrl } from "@/lib/storage";
 import { canViewCatch, shouldShowExactLocation } from "@/lib/visibility";
 import type { Database } from "@/integrations/supabase/types";
 import html2canvas from "html2canvas";
@@ -100,6 +101,7 @@ interface CatchData {
   user_id: string;
   profiles: {
     username: string;
+    avatar_path: string | null;
     avatar_url: string | null;
   };
   session: {
@@ -140,12 +142,21 @@ const CatchDetail = () => {
   const shareCardRef = useRef<HTMLDivElement | null>(null);
   const ownerId = catchData?.user_id ?? null;
 
+  const ownerAvatarUrl = useMemo(
+    () =>
+      resolveAvatarUrl({
+        path: catchData?.profiles?.avatar_path ?? null,
+        legacyUrl: catchData?.profiles?.avatar_url ?? null,
+      }),
+    [catchData?.profiles?.avatar_path, catchData?.profiles?.avatar_url]
+  );
+
   const fetchCatchData = useCallback(async () => {
     if (!id) return;
     setIsLoading(true);
     const { data, error } = await supabase
       .from("catches")
-      .select("*, profiles:user_id (username, avatar_url), session:session_id (id, title, venue, date)")
+      .select("*, profiles:user_id (username, avatar_path, avatar_url), session:session_id (id, title, venue, date)")
       .eq("id", id)
       .single();
 
@@ -208,7 +219,7 @@ const CatchDetail = () => {
     }
 
     const { data, error } = await supabase
-      .from("profiles_followers")
+      .from("profile_follows")
       .select("id")
       .eq("follower_id", user.id)
       .eq("following_id", ownerId)
@@ -310,7 +321,7 @@ const CatchDetail = () => {
 
     if (isFollowing) {
       const { error } = await supabase
-        .from("profiles_followers")
+        .from("profile_follows")
         .delete()
         .eq("follower_id", user.id)
         .eq("following_id", catchData.user_id);
@@ -323,7 +334,7 @@ const CatchDetail = () => {
         toast.success("Unfollowed angler");
       }
     } else {
-      const { error } = await supabase.from("profiles_followers").insert({
+      const { error } = await supabase.from("profile_follows").insert({
         follower_id: user.id,
         following_id: catchData.user_id,
       });
@@ -643,7 +654,7 @@ const CatchDetail = () => {
               <div className="flex flex-wrap items-center gap-3">
                 <Link to={`/profile/${catchData.user_id}`} className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-lg p-3">
                   <Avatar className="w-12 h-12">
-                    <AvatarImage src={profile.avatar_url || ""} />
+                    <AvatarImage src={ownerAvatarUrl ?? ""} />
                     <AvatarFallback>{profile.username?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>
                   </Avatar>
                   <span className="font-medium text-white">{profile.username}</span>

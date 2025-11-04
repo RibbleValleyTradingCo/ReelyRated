@@ -14,6 +14,7 @@ import { UK_FRESHWATER_SPECIES, getFreshwaterSpeciesLabel } from "@/lib/freshwat
 import { canViewCatch, shouldShowExactLocation } from "@/lib/visibility";
 import { useSearchParams } from "react-router-dom";
 import type { Database } from "@/integrations/supabase/types";
+import { resolveAvatarUrl } from "@/lib/storage";
 
 const capitalizeFirstWord = (value: string) => {
   if (!value) return "";
@@ -55,6 +56,7 @@ interface Catch {
   session_id: string | null;
   profiles: {
     username: string;
+    avatar_path: string | null;
     avatar_url: string | null;
   };
   ratings: { rating: number }[];
@@ -92,7 +94,7 @@ const Feed = () => {
         .from("catches")
         .select(`
           *,
-          profiles:user_id (username, avatar_url),
+          profiles:user_id (username, avatar_path, avatar_url),
           ratings (rating),
           comments:catch_comments (id),
           reactions:catch_reactions (user_id)
@@ -121,7 +123,7 @@ const Feed = () => {
 
     const loadFollowing = async () => {
       const { data, error } = await supabase
-        .from("profiles_followers")
+        .from("profile_follows")
         .select("following_id")
         .eq("follower_id", user.id);
 
@@ -316,7 +318,14 @@ const Feed = () => {
                 <h3 className="font-semibold text-lg">{catchItem.title}</h3>
                 <div className="flex items-center gap-2 w-full">
                   <Avatar className="w-8 h-8">
-                    <AvatarImage src={catchItem.profiles?.avatar_url ?? ""} />
+                    <AvatarImage
+                      src={
+                        resolveAvatarUrl({
+                          path: catchItem.profiles?.avatar_path ?? null,
+                          legacyUrl: catchItem.profiles?.avatar_url ?? null,
+                        }) ?? ""
+                      }
+                    />
                     <AvatarFallback>
                       {catchItem.profiles?.username?.[0]?.toUpperCase() ?? "A"}
                     </AvatarFallback>

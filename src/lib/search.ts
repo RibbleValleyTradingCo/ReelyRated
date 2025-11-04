@@ -6,6 +6,7 @@ import type { Database } from "@/integrations/supabase/types";
 export interface SearchProfile {
   id: string;
   username: string;
+  avatar_path: string | null;
   avatar_url: string | null;
   bio: string | null;
 }
@@ -19,6 +20,7 @@ export interface SearchCatch {
   conditions: Record<string, unknown> | null;
   profiles: {
     username: string;
+    avatar_path: string | null;
     avatar_url: string | null;
   } | null;
   visibility: Database["public"]["Enums"]["visibility_type"] | null;
@@ -94,7 +96,7 @@ export const searchAll = async (
 
   const profilePromise = supabase
     .from("profiles")
-    .select("id, username, avatar_url, bio")
+    .select("id, username, avatar_path, avatar_url, bio")
     .or(`username.ilike.${likePattern},bio.ilike.${likePattern}`)
     .limit(profileLimit);
 
@@ -126,7 +128,7 @@ export const searchAll = async (
         user_id,
         hide_exact_spot,
         conditions,
-        profiles:user_id (username, avatar_url)
+        profiles:user_id (username, avatar_path, avatar_url)
       `
     )
     .or(catchOrFilters.join(","))
