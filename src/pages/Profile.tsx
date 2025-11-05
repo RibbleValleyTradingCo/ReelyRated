@@ -14,6 +14,7 @@ import { createNotification } from "@/lib/notifications";
 import { getProfilePath, isUuid } from "@/lib/profile";
 import { resolveAvatarUrl } from "@/lib/storage";
 import { ProfileNotificationsSection } from "@/components/ProfileNotificationsSection";
+import ProfileNotFound from "@/components/ProfileNotFound";
 
 interface Profile {
   id: string;
@@ -53,6 +54,7 @@ const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedBio, setEditedBio] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isNotFound, setIsNotFound] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
@@ -69,7 +71,11 @@ const Profile = () => {
   const fetchProfile = useCallback(async () => {
     if (!slug) {
       setIsLoading(false);
-      navigate("/not-found", { replace: true });
+      setIsNotFound(true);
+      setProfile(null);
+      setCatches([]);
+      setFollowersCount(0);
+      setFollowingProfiles([]);
       return;
     }
     setIsLoading(true);
@@ -85,12 +91,16 @@ const Profile = () => {
 
     if (error || !data) {
       setIsLoading(false);
-      toast.error("Angler profile not found");
-      navigate("/not-found", { replace: true });
+      setIsNotFound(true);
+      setProfile(null);
+      setCatches([]);
+      setFollowersCount(0);
+      setFollowingProfiles([]);
       return;
     }
 
     const profileRow = data as Profile;
+    setIsNotFound(false);
     setProfile(profileRow);
     setEditedBio(profileRow.bio || "");
     setIsLoading(false);
@@ -346,6 +356,10 @@ const Profile = () => {
       }),
     [overallStats]
   );
+
+  if (isNotFound) {
+    return <ProfileNotFound />;
+  }
 
   if (isLoading || !profile) {
     return (

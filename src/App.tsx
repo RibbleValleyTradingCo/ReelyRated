@@ -18,6 +18,7 @@ import AdminReports from "./pages/AdminReports";
 import AdminAuditLog from "./pages/AdminAuditLog";
 import SearchPage from "./pages/Search";
 import Insights from "./pages/Insights";
+import LeaderboardPage from "./pages/LeaderboardPage";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/feed" element={<Feed />} />
+            <Route path="/leaderboard" element={<LeaderboardPage />} />
             <Route path="/add-catch" element={<AddCatch />} />
             <Route path="/catch/:id" element={<CatchDetail />} />
             <Route path="/profile/:slug" element={<Profile />} />

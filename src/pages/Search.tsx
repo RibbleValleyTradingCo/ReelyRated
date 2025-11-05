@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ const Section = ({
 const SearchPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryParam = searchParams.get("q") ?? "";
+  const navigate = useNavigate();
 
   const [query, setQuery] = useState(queryParam);
   const [profiles, setProfiles] = useState<SearchProfile[]>([]);
@@ -77,6 +78,17 @@ const SearchPage = () => {
   useEffect(() => {
     setQuery(queryParam);
   }, [queryParam]);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        navigate(-1);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [navigate]);
 
   useEffect(() => {
     const trimmed = queryParam.trim();

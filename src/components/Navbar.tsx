@@ -65,54 +65,69 @@ export const Navbar = () => {
     }
   };
 
+  const renderAuthIcons = () => (
+    <div className="flex items-center gap-2 overflow-visible">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={isOnSearchRoute ? "Close search" : "Open search"}
+        onClick={handleSearchToggle}
+      >
+        {isOnSearchRoute ? <X className="h-5 w-5" /> : <SearchIcon className="h-5 w-5" />}
+      </Button>
+      <NotificationsBell />
+      <Button
+        variant="outline"
+        size="icon"
+        aria-controls={MOBILE_MENU_ID}
+        aria-expanded={menuOpen}
+        aria-haspopup="true"
+        aria-label="Toggle navigation menu"
+        onClick={() => setMenuOpen((prev) => !prev)}
+      >
+        {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+      </Button>
+    </div>
+  );
+
+  const renderGuestActions = () => (
+    <div className="flex items-center gap-3">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={isOnSearchRoute ? "Close search" : "Open search"}
+        onClick={handleSearchToggle}
+      >
+        {isOnSearchRoute ? <X className="h-5 w-5" /> : <SearchIcon className="h-5 w-5" />}
+      </Button>
+      <Button asChild variant="ocean" size="sm" className="px-4 py-2">
+        <Link to="/auth#signup">Sign Up</Link>
+      </Button>
+      <Link
+        to="/auth"
+        className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        Log In
+      </Link>
+    </div>
+  );
+
   return (
     <nav className="relative z-20 border-b border-border/70 bg-card">
-      <div className="container mx-auto grid max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-4 md:px-6 lg:px-8">
-        <div className="flex items-center justify-start overflow-visible">
-          {user ? (
-            <NotificationsBell />
-          ) : (
-            <Button asChild variant="ocean" size="sm" className="px-4 py-2">
-              <Link to="/auth#signup">Sign Up</Link>
-            </Button>
-          )}
-        </div>
-
-        <Link to="/" className="flex flex-col items-center gap-1 text-center">
+      <div className="container mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-6 lg:px-8">
+        <Link to="/" className="flex items-center gap-3">
           <LogoMark className="h-12 w-12 transition hover:scale-105" />
-          <span className="text-base font-semibold tracking-tight text-foreground">ReelyRated</span>
-          <span className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Freshwater Social</span>
+          <div className="leading-tight">
+            <span className="block text-base font-semibold tracking-tight text-foreground">
+              ReelyRated
+            </span>
+            <span className="block text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+              Freshwater Social
+            </span>
+          </div>
         </Link>
 
-        <div className="flex items-center justify-end gap-2 overflow-visible">
-          {user ? (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={isOnSearchRoute ? "Close search" : "Open search"}
-                onClick={handleSearchToggle}
-              >
-                {isOnSearchRoute ? <X className="h-5 w-5" /> : <SearchIcon className="h-5 w-5" />}
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-controls={MOBILE_MENU_ID}
-                aria-expanded={menuOpen}
-                aria-haspopup="true"
-                aria-label="Toggle navigation menu"
-                onClick={() => setMenuOpen((prev) => !prev)}
-              >
-                {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </Button>
-            </>
-          ) : (
-            <Link to="/auth" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-              Log In
-            </Link>
-          )}
-        </div>
+        {user ? renderAuthIcons() : renderGuestActions()}
       </div>
 
       {user ? (

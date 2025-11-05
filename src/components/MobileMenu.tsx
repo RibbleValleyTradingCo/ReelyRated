@@ -50,24 +50,24 @@ export const MobileMenu = ({ open, onClose, user, onSignOut, onSignIn, onNavigat
       return;
     }
 
-    if (!open) {
-      document.body.style.overflow = "";
-      document.body.style.paddingRight = "";
-      return;
-    }
+    const { body } = document;
+    const previousOverflow = body.style.overflow;
+    const previousPadding = body.style.paddingRight;
 
-    const previousOverflow = document.body.style.overflow;
-    const previousPadding = document.body.style.paddingRight;
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-
-    document.body.style.overflow = "hidden";
-    if (scrollbarWidth > 0) {
-      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    if (open) {
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+      body.style.overflow = "hidden";
+      if (scrollbarWidth > 0) {
+        body.style.paddingRight = `${scrollbarWidth}px`;
+      }
+    } else {
+      body.style.overflow = "";
+      body.style.paddingRight = "";
     }
 
     return () => {
-      document.body.style.overflow = previousOverflow;
-      document.body.style.paddingRight = previousPadding;
+      body.style.overflow = previousOverflow;
+      body.style.paddingRight = previousPadding;
     };
   }, [open]);
 
@@ -195,7 +195,7 @@ export const MobileMenu = ({ open, onClose, user, onSignOut, onSignIn, onNavigat
               className="h-9 w-9 rounded-full"
               asChild
             >
-              <Link to="/search" onClick={handleNavigate()}>
+              <Link to="/search" onClick={handleNavigate()} aria-label="Open search">
                 <SearchIcon className="h-5 w-5" />
               </Link>
             </Button>
