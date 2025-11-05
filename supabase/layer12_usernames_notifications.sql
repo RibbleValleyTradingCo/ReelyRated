@@ -66,7 +66,10 @@ begin
 end;
 $$;
 
--- Normalize existing usernames (idempotent) -------------------------------------
+-- Drop dependent search views so column-type changes can proceed safely.
+drop view if exists public.search_catches_view;
+drop view if exists public.search_profiles_view;
+
 update public.profiles
 set username = lower(regexp_replace(username, '[^a-z0-9_-]+', '-', 'g'))
 where username is not null
@@ -116,11 +119,58 @@ alter table public.profiles
       and username::text ~ '^[a-z0-9](?:[a-z0-9_-]{1,28}[a-z0-9])?$'
     );
 
-alter table public.profiles
-  add constraint profiles_username_unique unique (username);
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'profiles_username_unique'
+      and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+      add constraint profiles_username_unique unique (username);
+  end if;
+end;
+$$;
 
 create index if not exists profiles_username_pattern_idx
   on public.profiles (username citext_pattern_ops);
+
+-- Recreate search views now that the username column uses citext.
+create or replace view public.search_profiles_view as
+select
+  p.id,
+  p.username,
+  p.avatar_path,
+  p.avatar_url,
+  p.bio,
+  p.created_at,
+  p.updated_at
+from public.profiles p;
+
+comment on view public.search_profiles_view is
+  'Helper view for profile search results (exposes avatar info and bios).';
+
+create or replace view public.search_catches_view as
+select
+  c.id,
+  c.title,
+  c.species,
+  c.location,
+  c.visibility,
+  c.user_id,
+  c.hide_exact_spot,
+  c.conditions,
+  c.created_at,
+  p.username,
+  p.avatar_path,
+  p.avatar_url
+from public.catches c
+left join public.profiles p
+  on p.id = c.user_id;
+
+comment on view public.search_catches_view is
+  'Helper view for catch search results including owner avatar metadata.';
 
 -- Updated signup trigger to use sanitized usernames -----------------------------
 create or replace function public.handle_new_user()
@@ -241,12 +291,12 @@ language plpgsql
 security definer set search_path = public
 as $$
 declare
-  actor_id uuid := auth.uid();
-  actor_username citext;
+  v_actor_id uuid := auth.uid();
+  v_actor_username citext;
   payload jsonb;
   inserted_id uuid;
 begin
-  if actor_id is null then
+  if v_actor_id is null then
     raise exception 'Authentication required to create notifications';
   end if;
 
@@ -258,13 +308,13 @@ begin
     raise exception 'Notification message is required';
   end if;
 
-  if recipient_id = actor_id then
+  if recipient_id = v_actor_id then
     return null;
   end if;
 
-  select username into actor_username
+  select username into v_actor_username
   from public.profiles
-  where id = actor_id;
+  where id = v_actor_id;
 
   perform case
     when event_type = 'new_comment' then (
@@ -272,7 +322,7 @@ begin
       from public.catch_comments cc
       join public.catches c on c.id = cc.catch_id
       where cc.id = comment_target
-        and cc.user_id = actor_id
+        and cc.user_id = v_actor_id
         and c.user_id = recipient_id
         and (catch_target is null or c.id = catch_target)
     )
@@ -280,14 +330,14 @@ begin
       select 1
       from public.catch_comments cc
       where cc.id = comment_target
-        and cc.user_id = actor_id
+        and cc.user_id = v_actor_id
     )
     when event_type = 'new_reaction' then (
       select 1
       from public.catch_reactions cr
       join public.catches c on c.id = cr.catch_id
       where cr.catch_id = catch_target
-        and cr.user_id = actor_id
+        and cr.user_id = v_actor_id
         and c.user_id = recipient_id
     )
     when event_type = 'new_rating' then (
@@ -295,13 +345,13 @@ begin
       from public.ratings r
       join public.catches c on c.id = r.catch_id
       where r.catch_id = catch_target
-        and r.user_id = actor_id
+        and r.user_id = v_actor_id
         and c.user_id = recipient_id
     )
     when event_type = 'new_follower' then (
       select 1
       from public.profile_follows pf
-      where pf.follower_id = actor_id
+      where pf.follower_id = v_actor_id
         and pf.following_id = recipient_id
     )
     when event_type = 'admin_report' then 1
@@ -316,7 +366,7 @@ begin
     select 1
     from public.notifications n
     where n.user_id = recipient_id
-      and n.actor_id = actor_id
+      and n.actor_id = v_actor_id
       and n.type = event_type
       and coalesce(n.data->>'catch_id', '') = coalesce(catch_target::text, '')
       and coalesce(n.data->>'comment_id', '') = coalesce(comment_target::text, '')
@@ -327,11 +377,11 @@ begin
 
   payload := jsonb_build_object(
     'message', message,
-    'actor_id', actor_id::text
+    'actor_id', v_actor_id::text
   );
 
-  if actor_username is not null then
-    payload := payload || jsonb_build_object('actor_username', actor_username::text);
+  if v_actor_username is not null then
+    payload := payload || jsonb_build_object('actor_username', v_actor_username::text);
   end if;
 
   if catch_target is not null then
@@ -347,7 +397,7 @@ begin
   end if;
 
   insert into public.notifications (user_id, actor_id, type, data)
-  values (recipient_id, actor_id, event_type, payload)
+  values (recipient_id, v_actor_id, event_type, payload)
   returning id into inserted_id;
 
   return inserted_id;
