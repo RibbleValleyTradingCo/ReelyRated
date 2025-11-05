@@ -37,6 +37,8 @@ interface MenuItem {
   testId?: string;
 }
 
+export const MOBILE_MENU_ID = "navigation-drawer";
+
 const menuItemClasses =
   "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-base font-medium min-h-[44px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
 
@@ -136,13 +138,14 @@ export const MobileMenu = ({ open, onClose, user, onSignOut, onSignIn, onNavigat
       : [];
 
   return (
-    <div className="fixed inset-0 z-50 md:hidden">
+    <div id={MOBILE_MENU_ID} className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div
         className="relative ml-auto flex h-full w-full max-w-sm flex-col overflow-y-auto bg-card px-5 pb-6 shadow-2xl"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 1.25rem)" }}
         role="dialog"
         aria-modal="true"
+        aria-label="Primary navigation"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">

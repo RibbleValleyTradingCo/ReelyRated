@@ -21,7 +21,7 @@ const Auth = () => {
 
   useEffect(() => {
     if (!loading && user) {
-      navigate("/feed");
+      navigate("/");
     }
   }, [user, loading, navigate]);
 
@@ -33,7 +33,7 @@ const Auth = () => {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/feed`,
+        emailRedirectTo: `${window.location.origin}/`,
         data: {
           username,
         },
@@ -53,7 +53,7 @@ const Auth = () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/feed`,
+        redirectTo: `${window.location.origin}/`,
       },
     });
 
@@ -78,7 +78,7 @@ const Auth = () => {
       toast.error(error.message);
     } else {
       toast.success("Welcome back!");
-      navigate("/feed");
+      navigate("/");
     }
     setIsLoading(false);
   };
