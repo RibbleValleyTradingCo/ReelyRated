@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/components/AuthProvider";
 import { isAdminUser } from "@/lib/admin";
+import { getProfilePath } from "@/lib/profile";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -448,7 +449,9 @@ const AdminReports = () => {
       }
 
       if (report.target_type === "profile") {
-        navigate(`/profile/${report.target_id}`);
+        const candidateUsername =
+          selectedReport?.id === report.id ? details?.targetProfile?.username ?? null : null;
+        navigate(getProfilePath({ username: candidateUsername, id: report.target_id }));
         return;
       }
 
@@ -473,7 +476,7 @@ const AdminReports = () => {
         navigate(`/catch/${data.catch_id}`);
       }
     },
-    [navigate]
+    [details, navigate, selectedReport]
   );
 
   const handleDeleteContent = useCallback(async () => {

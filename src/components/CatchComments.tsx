@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { useAuth } from "@/components/AuthProvider";
 import { createNotification } from "@/lib/notifications";
+import { getProfilePath } from "@/lib/profile";
 import ReportButton from "@/components/ReportButton";
 import { cn } from "@/lib/utils";
 import { resolveAvatarUrl } from "@/lib/storage";
@@ -25,6 +27,7 @@ interface CommentRow {
   created_at: string;
   user_id: string;
   profiles: {
+    id: string;
     username: string;
     avatar_path: string | null;
     avatar_url: string | null;
@@ -70,7 +73,7 @@ export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId
     setIsLoading(true);
     const { data, error } = await supabase
       .from("catch_comments")
-      .select("id, body, created_at, user_id, profiles:user_id (username, avatar_path, avatar_url)")
+      .select("id, body, created_at, user_id, profiles:user_id (id, username, avatar_path, avatar_url)")
       .eq("catch_id", catchId)
       .order("created_at", { ascending: false });
 
@@ -226,10 +229,10 @@ export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId
         void createNotification({
           userId: catchOwnerId,
           type: "new_comment",
-          data: {
-            actor_id: currentUserId,
-            catch_id: catchId,
+          payload: {
             message: `${actorName} commented on your catch "${catchTitle ?? "your catch"}".`,
+            catchId,
+            commentId: insertedComment?.id,
           },
         });
       }
@@ -254,11 +257,11 @@ export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId
                 createNotification({
                   userId: profileRow.id,
                   type: "mention",
-                  data: {
-                    actor_id: currentUserId,
-                    catch_id: catchId,
-                    comment_id: insertedComment?.id,
+                  payload: {
                     message: `${actorName} mentioned you in a comment.`,
+                    catchId,
+                    commentId: insertedComment?.id,
+                    extraData: { catch_title: catchTitle },
                   },
                 })
               )
@@ -346,22 +349,34 @@ export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId
           <div className="space-y-4">
             {comments.map((comment) => (
               <div key={comment.id} className="flex gap-3">
-                <Avatar className="h-9 w-9">
-                  <AvatarImage
-                    src={
-                      resolveAvatarUrl({
-                        path: comment.profiles?.avatar_path ?? null,
-                        legacyUrl: comment.profiles?.avatar_url ?? null,
-                      }) ?? ""
-                    }
-                  />
-                  <AvatarFallback>
-                    {comment.profiles?.username?.[0]?.toUpperCase() ?? "A"}
-                  </AvatarFallback>
-                </Avatar>
+                <Link
+                  to={getProfilePath({ username: comment.profiles?.username, id: comment.user_id })}
+                  className="focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-full"
+                  aria-label={`View ${comment.profiles?.username ?? "angler"}'s profile`}
+                >
+                  <Avatar className="h-9 w-9">
+                    <AvatarImage
+                      src={
+                        resolveAvatarUrl({
+                          path: comment.profiles?.avatar_path ?? null,
+                          legacyUrl: comment.profiles?.avatar_url ?? null,
+                        }) ?? ""
+                      }
+                    />
+                    <AvatarFallback>
+                      {comment.profiles?.username?.[0]?.toUpperCase() ?? "A"}
+                    </AvatarFallback>
+                  </Avatar>
+                </Link>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold">{comment.profiles?.username ?? "Unknown angler"}</span>
+                    <Link
+                      to={getProfilePath({ username: comment.profiles?.username, id: comment.user_id })}
+                      className="font-semibold text-foreground transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded"
+                      aria-label={`View ${comment.profiles?.username ?? "angler"}'s profile`}
+                    >
+                      {comment.profiles?.username ?? "Unknown angler"}
+                    </Link>
                     <span className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
                     </span>

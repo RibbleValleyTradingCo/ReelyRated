@@ -10,6 +10,7 @@ import { formatSpeciesName, searchAll, type SearchCatch, type SearchProfile } fr
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveAvatarUrl } from "@/lib/storage";
+import { getProfilePath } from "@/lib/profile";
 
 export const GlobalSearch = () => {
   const navigate = useNavigate();
@@ -181,7 +182,7 @@ export const GlobalSearch = () => {
                         {profiles.map((profile) => (
                           <button
                             key={profile.id}
-                            onClick={() => handleNavigate(`/profile/${profile.id}`)}
+                            onClick={() => handleNavigate(getProfilePath({ username: profile.username, id: profile.id }))}
                             className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-muted"
                           >
                             <Avatar className="h-8 w-8">

@@ -11,9 +11,12 @@ import { toast } from "sonner";
 import { Star, Trophy, Fish, BarChart3, Loader2, Settings, Sparkles } from "lucide-react";
 import { getFreshwaterSpeciesLabel } from "@/lib/freshwater-data";
 import { createNotification } from "@/lib/notifications";
+import { getProfilePath, isUuid } from "@/lib/profile";
 import { resolveAvatarUrl } from "@/lib/storage";
+import { ProfileNotificationsSection } from "@/components/ProfileNotificationsSection";
 
 interface Profile {
+  id: string;
   username: string;
   avatar_path: string | null;
   avatar_url: string | null;
@@ -42,7 +45,7 @@ interface FollowingProfile {
 const PROFILE_STATUS_PLACEHOLDER = "Nothing here yet. Tell people what you fish for.";
 
 const Profile = () => {
-  const { userId } = useParams();
+  const { slug } = useParams<{ slug?: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -55,7 +58,8 @@ const Profile = () => {
   const [followersCount, setFollowersCount] = useState(0);
   const [followingProfiles, setFollowingProfiles] = useState<FollowingProfile[]>([]);
 
-  const isOwnProfile = user?.id === userId;
+  const profileId = profile?.id ?? null;
+  const isOwnProfile = user?.id === profileId;
 
   const profileAvatarUrl = useMemo(
     () => resolveAvatarUrl({ path: profile?.avatar_path, legacyUrl: profile?.avatar_url }),
@@ -63,51 +67,66 @@ const Profile = () => {
   );
 
   const fetchProfile = useCallback(async () => {
-    if (!userId) return;
+    if (!slug) {
+      setIsLoading(false);
+      navigate("/not-found", { replace: true });
+      return;
+    }
     setIsLoading(true);
-    const { data, error } = await supabase
+    const slugIsUuid = isUuid(slug);
+    let query = supabase
       .from("profiles")
-      .select("username, avatar_path, avatar_url, bio")
-      .eq("id", userId)
-      .single();
+      .select("id, username, avatar_path, avatar_url, bio")
+      .limit(1);
+
+    query = slugIsUuid ? query.eq("id", slug) : query.eq("username", slug);
+
+    const { data, error } = await query.maybeSingle();
 
     if (error || !data) {
-      toast.error("Failed to load profile");
-    } else {
-      const profileRow = data as Profile;
-      setProfile(profileRow);
-      setEditedBio(profileRow.bio || "");
+      setIsLoading(false);
+      toast.error("Angler profile not found");
+      navigate("/not-found", { replace: true });
+      return;
     }
+
+    const profileRow = data as Profile;
+    setProfile(profileRow);
+    setEditedBio(profileRow.bio || "");
     setIsLoading(false);
-  }, [userId]);
+
+    if ((slugIsUuid || profileRow.username !== slug) && profileRow.username) {
+      navigate(`/profile/${profileRow.username}`, { replace: true });
+    }
+  }, [navigate, slug]);
 
   const fetchUserCatches = useCallback(async () => {
-    if (!userId) return;
+    if (!profileId) return;
     const { data, error } = await supabase
       .from("catches")
       .select("id, title, image_url, weight, weight_unit, species, created_at, ratings (rating)")
-      .eq("user_id", userId)
+      .eq("user_id", profileId)
       .order("created_at", { ascending: false });
 
     if (!error && data) {
       setCatches(data);
     }
-  }, [userId]);
+  }, [profileId]);
 
   const fetchFollowers = useCallback(async () => {
-    if (!userId) return;
+    if (!profileId) return;
     const { count, error } = await supabase
       .from("profile_follows")
       .select("id", { count: "exact", head: true })
-      .eq("following_id", userId);
+      .eq("following_id", profileId);
 
     if (!error && count !== null) {
       setFollowersCount(count);
     }
-  }, [userId]);
+  }, [profileId]);
 
   const fetchFollowingProfiles = useCallback(async () => {
-    if (!userId) return;
+    if (!profileId) return;
     const { data, error } = await supabase
       .from("profile_follows")
       .select(
@@ -121,7 +140,7 @@ const Profile = () => {
           )
         `
       )
-      .eq("follower_id", userId);
+      .eq("follower_id", profileId);
 
     if (!error && data) {
       const parsed = (data as { followed_profile: FollowingProfile | null }[])
@@ -129,44 +148,48 @@ const Profile = () => {
         .filter((profileRow): profileRow is FollowingProfile => !!profileRow);
       setFollowingProfiles(parsed);
     }
-  }, [userId]);
+  }, [profileId]);
 
   const fetchFollowStatus = useCallback(async () => {
-    if (!userId || !user || user.id === userId) return;
+    if (!profileId || !user || user.id === profileId) return;
     const { data, error } = await supabase
       .from("profile_follows")
       .select("id")
       .eq("follower_id", user.id)
-      .eq("following_id", userId)
+      .eq("following_id", profileId)
       .maybeSingle();
 
     if (!error) {
       setIsFollowing(!!data);
     }
-  }, [userId, user]);
+  }, [profileId, user]);
 
   useEffect(() => {
     void fetchProfile();
+  }, [fetchProfile]);
+
+  useEffect(() => {
+    if (!profileId) return;
     void fetchUserCatches();
     void fetchFollowers();
     void fetchFollowingProfiles();
-  }, [fetchProfile, fetchUserCatches, fetchFollowers, fetchFollowingProfiles]);
+  }, [profileId, fetchFollowers, fetchFollowingProfiles, fetchUserCatches]);
 
   useEffect(() => {
-    if (!userId || !user || user.id === userId) {
+    if (!profileId || !user || user.id === profileId) {
       setIsFollowing(false);
       return;
     }
     void fetchFollowStatus();
-  }, [userId, user, fetchFollowStatus]);
+  }, [profileId, user, fetchFollowStatus]);
 
   const handleToggleFollow = async () => {
-    if (!user || !userId) {
+    if (!user || !profileId) {
       toast.error("Sign in to follow anglers");
       navigate("/auth");
       return;
     }
-    if (user.id === userId) return;
+    if (user.id === profileId) return;
 
     setFollowLoading(true);
 
@@ -175,7 +198,7 @@ const Profile = () => {
         .from("profile_follows")
         .delete()
         .eq("follower_id", user.id)
-        .eq("following_id", userId);
+        .eq("following_id", profileId);
 
       if (error) {
         toast.error("Failed to unfollow");
@@ -186,7 +209,7 @@ const Profile = () => {
     } else {
       const { error } = await supabase.from("profile_follows").insert({
         follower_id: user.id,
-        following_id: userId,
+        following_id: profileId,
       });
 
       if (error) {
@@ -195,10 +218,9 @@ const Profile = () => {
         setIsFollowing(true);
         setFollowersCount((count) => count + 1);
         void createNotification({
-          userId,
+          userId: profileId,
           type: "new_follower",
-          data: {
-            actor_id: user.id,
+          payload: {
             message: `${user.user_metadata?.username ?? user.email ?? "Someone"} started following you.`,
           },
         });
@@ -502,6 +524,10 @@ const Profile = () => {
             </div>
           </section>
 
+          {isOwnProfile && (
+            <ProfileNotificationsSection userId={profileId} />
+          )}
+
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-900">
@@ -516,7 +542,7 @@ const Profile = () => {
                 {followingProfiles.map((angler) => (
                   <Link
                     key={angler.id}
-                    to={`/profile/${angler.id}`}
+                    to={getProfilePath({ username: angler.username, id: angler.id })}
                     className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
                   >
                     <Avatar className="h-12 w-12">

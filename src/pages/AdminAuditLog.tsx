@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/components/AuthProvider";
 import { isAdminUser } from "@/lib/admin";
+import { getProfilePath } from "@/lib/profile";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -201,7 +202,13 @@ const AdminAuditLog = () => {
       }
 
       if (row.target_type === "user") {
-        navigate(`/profile/${row.target_id}`);
+        const { data: profileRow } = await supabase
+          .from("profiles")
+          .select("username")
+          .eq("id", row.target_id)
+          .maybeSingle();
+
+        navigate(getProfilePath({ username: profileRow?.username ?? null, id: row.target_id }));
         return;
       }
 

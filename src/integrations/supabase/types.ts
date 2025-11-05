@@ -268,30 +268,46 @@ export type Database = {
       }
       notifications: {
         Row: {
+          actor_id: string
           created_at: string
           data: Json
           id: string
           is_read: boolean
+          read_at: string | null
           type: string
+          updated_at: string
           user_id: string
         }
         Insert: {
-          created_at?: string
-          data: Json
-          id?: string
-          is_read?: boolean
-          type: string
-          user_id: string
-        }
-        Update: {
+          actor_id?: string
           created_at?: string
           data?: Json
           id?: string
           is_read?: boolean
+          read_at?: string | null
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          data?: Json
+          id?: string
+          is_read?: boolean
+          read_at?: string | null
           type?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notifications_user_id_fkey"
             columns: ["user_id"]
@@ -529,7 +545,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_notification: {
+        Args: {
+          recipient_id: string
+          event_type: string
+          message: string
+          catch_target?: string | null
+          comment_target?: string | null
+          extra_data?: Json | null
+        }
+        Returns: string | null
+      }
     }
     Enums: {
       fishing_method:

@@ -14,6 +14,7 @@ import {
   type SearchCatch,
   type SearchProfile,
 } from "@/lib/search";
+import { getProfilePath } from "@/lib/profile";
 import { resolveAvatarUrl } from "@/lib/storage";
 
 const Section = ({
@@ -204,7 +205,7 @@ const SearchPage = () => {
                       {profiles.map((profile) => (
                         <Link
                           key={profile.id}
-                          to={`/profile/${profile.id}`}
+                          to={getProfilePath({ username: profile.username, id: profile.id })}
                           className="flex items-center gap-4 p-4 transition hover:bg-muted"
                         >
                           <Avatar className="h-12 w-12">

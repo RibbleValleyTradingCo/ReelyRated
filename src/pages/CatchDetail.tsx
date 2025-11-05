@@ -43,6 +43,7 @@ import { format } from "date-fns";
 import { getFreshwaterSpeciesLabel } from "@/lib/freshwater-data";
 import { CatchComments } from "@/components/CatchComments";
 import { createNotification } from "@/lib/notifications";
+import { getProfilePath } from "@/lib/profile";
 import { resolveAvatarUrl } from "@/lib/storage";
 import { canViewCatch, shouldShowExactLocation } from "@/lib/visibility";
 import type { Database } from "@/integrations/supabase/types";
@@ -349,9 +350,11 @@ const CatchDetail = () => {
         void createNotification({
           userId: catchData.user_id,
           type: "new_follower",
-          data: {
-            actor_id: user.id,
+          payload: {
             message: `${actorName} started following you.`,
+            extraData: {
+              follower_username: actorName,
+            },
           },
         });
       }
@@ -408,10 +411,12 @@ const CatchDetail = () => {
           void createNotification({
             userId: catchData.user_id,
             type: "new_reaction",
-            data: {
-              actor_id: user.id,
-              catch_id: catchData.id,
+            payload: {
               message: `${actorName} liked your catch "${catchData.title}".`,
+              catchId: catchData.id,
+              extraData: {
+                catch_title: catchData.title,
+              },
             },
           });
         }
@@ -505,10 +510,12 @@ const CatchDetail = () => {
         void createNotification({
           userId: catchData.user_id,
           type: "new_rating",
-          data: {
-            actor_id: user.id,
-            catch_id: catchData.id,
+          payload: {
             message: `${actorName} rated your catch "${catchData.title}" ${userRating}/10.`,
+            catchId: catchData.id,
+            extraData: {
+              rating: userRating,
+            },
           },
         });
       }
@@ -652,7 +659,10 @@ const CatchDetail = () => {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <Link to={`/profile/${catchData.user_id}`} className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-lg p-3">
+                <Link
+                  to={getProfilePath({ username: catchData.profiles?.username, id: catchData.user_id })}
+                  className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-lg p-3"
+                >
                   <Avatar className="w-12 h-12">
                     <AvatarImage src={ownerAvatarUrl ?? ""} />
                     <AvatarFallback>{profile.username?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>

@@ -15,11 +15,40 @@ export const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileUsername, setProfileUsername] = useState<string | null>(null);
   const isOnSearchRoute = location.pathname.startsWith("/search");
 
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!user) {
+      setProfileUsername(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.error("Failed to load profile username", error);
+        }
+        setProfileUsername(data?.username ?? user.user_metadata?.username ?? null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -90,7 +119,7 @@ export const Navbar = () => {
         <MobileMenu
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
-          user={{ id: user.id, isAdmin: isAdminUser(user.id) }}
+          user={{ id: user.id, username: profileUsername ?? user.user_metadata?.username ?? null, isAdmin: isAdminUser(user.id) }}
           onSignOut={handleSignOut}
         />
       ) : null}

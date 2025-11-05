@@ -1,4 +1,4 @@
-import { type ComponentType } from "react";
+import { type ComponentType, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import LogoMark from "@/components/LogoMark";
@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getProfilePath } from "@/lib/profile";
 
 interface MobileMenuProps {
   open: boolean;
@@ -22,6 +23,7 @@ interface MobileMenuProps {
   onSignOut?: () => void;
   user?: {
     id: string;
+    username?: string | null;
     isAdmin?: boolean;
   } | null;
   onNavigate?: () => void;
@@ -43,6 +45,32 @@ const menuItemClasses =
   "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-base font-medium min-h-[44px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
 
 export const MobileMenu = ({ open, onClose, user, onSignOut, onSignIn, onNavigate }: MobileMenuProps) => {
+  useEffect(() => {
+    if (typeof document === "undefined" || typeof window === "undefined") {
+      return;
+    }
+
+    if (!open) {
+      document.body.style.overflow = "";
+      document.body.style.paddingRight = "";
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const previousPadding = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPadding;
+    };
+  }, [open]);
+
   if (!open) return null;
 
   const handleNavigate = (callback?: () => void) => () => {
@@ -116,7 +144,7 @@ export const MobileMenu = ({ open, onClose, user, onSignOut, onSignIn, onNavigat
 
   const accountItems: MenuItem[] = user
     ? [
-        { label: "Profile", to: `/profile/${user.id}`, icon: User },
+        { label: "Profile", to: getProfilePath({ username: user.username, id: user.id }), icon: User },
         { label: "Sign Out", icon: LogOut, onClick: onSignOut, variant: "destructive" },
       ]
     : [];

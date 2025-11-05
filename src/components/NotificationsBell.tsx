@@ -5,156 +5,109 @@ import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { formatDistanceToNow } from "date-fns";
 import { useNavigate } from "react-router-dom";
-import type { Database } from "@/integrations/supabase/types";
-import { cn } from "@/lib/utils";
-
-type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
-
-const getNotificationTitle = (type: NotificationRow["type"]) => {
-  switch (type) {
-    case "new_follower":
-      return "New follower";
-    case "new_comment":
-      return "New comment";
-    case "new_reaction":
-      return "New like";
-    case "new_rating":
-      return "New rating";
-    case "mention":
-      return "Mention";
-    case "admin_report":
-      return "New report";
-    default:
-      return "Notification";
-  }
-};
-
-const NotificationItem = ({
-  notification,
-  onNavigate,
-}: {
-  notification: NotificationRow;
-  onNavigate: (notification: NotificationRow) => void;
-}) => {
-  const data = (notification.data ?? {}) as Record<string, unknown>;
-  const message =
-    (typeof data.message === "string" && data.message) ||
-    "You have a new notification.";
-  const timeAgo = formatDistanceToNow(new Date(notification.created_at), {
-    addSuffix: true,
-  });
-
-  return (
-    <div
-      key={notification.id}
-      className={cn(
-        "rounded-lg border border-border/40 bg-card/70 p-3 transition",
-        !notification.is_read && "border-primary/40 bg-primary/5"
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            {getNotificationTitle(notification.type)}
-          </p>
-          <p className="text-sm text-foreground mt-1">{message}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{timeAgo}</p>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-primary px-2"
-          onClick={() => onNavigate(notification)}
-        >
-          View
-        </Button>
-      </div>
-    </div>
-  );
-};
+import { useNotifications } from "@/hooks/useNotifications";
+import { NotificationListItem, type NotificationRow } from "@/components/notifications/NotificationListItem";
+import { resolveNotificationPath } from "@/lib/notifications-utils";
 
 export const NotificationsBell = () => {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const limit = 25;
 
-  const fetchNotifications = useCallback(async () => {
-    if (!user) {
-      setNotifications([]);
-      return;
-    }
-    setIsLoading(true);
-    const { data, error } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(25);
-
-    if (!error && data) {
-      setNotifications(data as NotificationRow[]);
-    }
-    setIsLoading(false);
-  }, [user]);
+  const {
+    notifications,
+    setNotifications,
+    loading: isLoading,
+    refresh,
+    markOne,
+    markAll,
+    clearAll,
+  } = useNotifications(user?.id ?? null, limit);
 
   useEffect(() => {
-    if (!loading) {
-      void fetchNotifications();
+    if (!authLoading && user) {
+      void refresh();
     }
-  }, [fetchNotifications, loading]);
+  }, [authLoading, refresh, user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`notifications:user:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newNotification = payload.new as NotificationRow;
+          setNotifications((prev) => {
+            const existingIds = new Set(prev.map((item) => item.id));
+            if (existingIds.has(newNotification.id)) return prev;
+            return [newNotification, ...prev].slice(0, limit);
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [limit, setNotifications, user]);
 
   const unreadCount = useMemo(
     () => notifications.filter((notification) => !notification.is_read).length,
     [notifications]
   );
 
-  const markAllAsRead = useCallback(async () => {
-    if (!user || unreadCount === 0) return;
-    const { error } = await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("user_id", user.id)
-      .eq("is_read", false);
-
-    if (!error) {
-      setNotifications((prev) =>
-        prev.map((notification) => ({ ...notification, is_read: true }))
-      );
-    }
-  }, [unreadCount, user]);
-
-  const handleOpenChange = async (value: boolean) => {
+  const handleOpenChange = (value: boolean) => {
     setOpen(value);
     if (value) {
-      await fetchNotifications();
-      await markAllAsRead();
+      void refresh();
     }
   };
 
-  const handleNavigate = (notification: NotificationRow) => {
-    if (notification.type === "admin_report") {
-      navigate("/admin/reports");
-      setOpen(false);
-      return;
-    }
-    const data = (notification.data ?? {}) as Record<string, unknown>;
-    if (typeof data.catch_id === "string") {
-      navigate(`/catch/${data.catch_id}`);
-      setOpen(false);
-      return;
-    }
-    if (typeof data.actor_id === "string") {
-      navigate(`/profile/${data.actor_id}`);
-      setOpen(false);
-      return;
-    }
-  };
+  const handleMarkAsRead = useCallback(
+    (notification: NotificationRow) => {
+      if (!notification.is_read) {
+        void markOne(notification.id);
+      }
+    },
+    [markOne]
+  );
 
-  if (loading || !user) {
+  const handleNavigate = useCallback(
+    (notification: NotificationRow) => {
+      if (!notification.is_read) {
+        void markOne(notification.id);
+      }
+
+      const destination = resolveNotificationPath(notification);
+      if (destination) {
+        navigate(destination);
+        setOpen(false);
+      }
+    },
+    [markOne, navigate]
+  );
+
+  const handleMarkAllClick = useCallback(() => {
+    if (unreadCount > 0) {
+      void markAll();
+    }
+  }, [markAll, unreadCount]);
+
+  const handleClearAll = useCallback(() => {
+    void clearAll();
+  }, [clearAll]);
+
+  if (authLoading || !user) {
     return null;
   }
 
@@ -166,6 +119,8 @@ export const NotificationsBell = () => {
           size="icon"
           className="relative rounded-full"
           onClick={() => setOpen((prev) => !prev)}
+          aria-label="Open notifications"
+          aria-expanded={open}
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
@@ -176,21 +131,51 @@ export const NotificationsBell = () => {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0 z-30" align="end">
-        <div className="border-b px-4 py-3">
-          <div className="flex items-center justify-between">
+        <div className="border-b px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-foreground">Notifications</p>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto px-2 text-xs"
+                onClick={() => {
+                  void refresh();
+                }}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    Loading
+                  </>
+                ) : (
+                  "Refresh"
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto px-2 text-xs text-destructive"
+                onClick={handleClearAll}
+                disabled={notifications.length === 0}
+              >
+                Clear all
+              </Button>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Stay up to date with the latest activity on your catches.</span>
             <Button
-              variant="ghost"
+              variant="link"
               size="sm"
-              className="h-auto px-2 text-xs"
-              onClick={() => fetchNotifications()}
+              className="h-auto px-0 text-xs"
+              onClick={handleMarkAllClick}
+              disabled={unreadCount === 0}
             >
-              Refresh
+              Mark all read
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Stay up to date with the latest activity on your catches.
-          </p>
         </div>
         <div className="p-3">
           {isLoading ? (
@@ -206,10 +191,11 @@ export const NotificationsBell = () => {
             <ScrollArea className="max-h-80 pr-2">
               <div className="space-y-3">
                 {notifications.map((notification) => (
-                  <NotificationItem
+                  <NotificationListItem
                     key={notification.id}
                     notification={notification}
-                    onNavigate={handleNavigate}
+                    onView={handleNavigate}
+                    onMarkRead={handleMarkAsRead}
                   />
                 ))}
               </div>

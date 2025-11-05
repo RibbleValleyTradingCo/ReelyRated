@@ -34,7 +34,7 @@ const App = () => (
             <Route path="/feed" element={<Feed />} />
             <Route path="/add-catch" element={<AddCatch />} />
             <Route path="/catch/:id" element={<CatchDetail />} />
-            <Route path="/profile/:userId" element={<Profile />} />
+            <Route path="/profile/:slug" element={<Profile />} />
             <Route path="/settings/profile" element={<ProfileSettings />} />
             <Route path="/sessions" element={<Sessions />} />
             <Route path="/admin/reports" element={<AdminReports />} />
