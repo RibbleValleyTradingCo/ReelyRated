@@ -32,7 +32,11 @@ const formatRating = (avg: number | null, count: number | null) => {
   return `⭐ ${avg.toFixed(1)} (${count})`;
 };
 
-const LeaderboardComponent = () => {
+interface LeaderboardProps {
+  limit?: number;
+}
+
+const LeaderboardComponent = ({ limit = 50 }: LeaderboardProps) => {
   const navigate = useNavigate();
   const [selectedSpecies, setSelectedSpecies] = useState<string>("");
   const [speciesOptions, setSpeciesOptions] = useState<string[]>([]);
@@ -41,6 +45,7 @@ const LeaderboardComponent = () => {
 
   const { entries, loading, error } = useLeaderboardRealtime(
     selectedSpecies ? selectedSpecies : null,
+    limit,
   );
 
   useEffect(() => {
@@ -127,23 +132,27 @@ const LeaderboardComponent = () => {
 
   return (
     <div className="leaderboard-wrapper">
-      <div className="leaderboard-controls">
-        <label htmlFor="leaderboard-species">Filter by species</label>
-        <select
-          id="leaderboard-species"
-          className="leaderboard-select"
-          value={selectedSpecies}
-          onChange={handleSpeciesChange}
-          disabled={speciesOptions.length === 0 && loading}
-        >
-          <option value="">All species</option>
-          {speciesOptions.map((species) => (
-            <option key={species} value={species}>
-              {formatSpeciesLabel(species)}
-            </option>
-          ))}
-        </select>
-        <span className="leaderboard-meta">
+      <div className={`leaderboard-controls${tableIsBusy ? " leaderboard-controls--busy" : ""}`}>
+        <div className="leaderboard-controls__group">
+          <label htmlFor="leaderboard-species">Filter by species</label>
+          <div className="leaderboard-select-wrapper">
+            <select
+              id="leaderboard-species"
+              className="leaderboard-select"
+              value={selectedSpecies}
+              onChange={handleSpeciesChange}
+              disabled={speciesOptions.length === 0 && loading}
+            >
+              <option value="">All species</option>
+              {speciesOptions.map((species) => (
+                <option key={species} value={species}>
+                  {formatSpeciesLabel(species)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <span className="leaderboard-meta" aria-live="polite">
           Showing {entries.length} catch{entries.length === 1 ? "" : "es"}
         </span>
       </div>
@@ -161,7 +170,7 @@ const LeaderboardComponent = () => {
       ) : null}
 
       {tableIsBusy ? (
-        <div className="leaderboard-loading" role="status">
+        <div className="leaderboard-loading" role="status" aria-live="assertive">
           Updating leaderboard…
         </div>
       ) : null}
@@ -173,69 +182,72 @@ const LeaderboardComponent = () => {
       ) : null}
 
       {entries.length > 0 ? (
-        <div className="leaderboard-table-wrapper">
-          <table
-            className={`leaderboard-table${tableIsBusy ? " leaderboard-table--busy" : ""}`}
-            aria-busy={tableIsBusy}
-          >
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Score</th>
-                <th>Catch</th>
-                <th>Species</th>
-                <th className="hide-md">Weight</th>
-                <th className="hide-md">Rating</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry, index) => {
-                const thumbnail =
-                  (entry.gallery_photos && entry.gallery_photos[0]) ||
-                  entry.image_url ||
-                  heroFish;
-                const isLeader = index === 0;
+        <>
+          <div className="leaderboard-table-wrapper">
+            <table
+              className={`leaderboard-table${tableIsBusy ? " leaderboard-table--busy" : ""}`}
+              aria-busy={tableIsBusy}
+            >
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Score</th>
+                  <th>Catch</th>
+                  <th>Species</th>
+                  <th className="hide-md">Weight</th>
+                  <th className="hide-md">Rating</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry, index) => {
+                  const thumbnail =
+                    (entry.gallery_photos && entry.gallery_photos[0]) ||
+                    entry.image_url ||
+                    heroFish;
+                  const isLeader = index === 0;
 
-                return (
-                  <tr
-                    key={entry.id}
-                    className="leaderboard-row"
-                    onClick={() => handleCatchClick(entry.id)}
-                  >
-                    <td className="rank-col">
-                      <span className="rank-wrapper">
-                        {isLeader ? <Crown className="rank-crown" aria-hidden="true" /> : null}
-                        <span>#{index + 1}</span>
-                      </span>
-                    </td>
-                    <td className="score-col">
-                      <span className="score-chip">
-                        {entry.total_score !== null && entry.total_score !== undefined
-                          ? entry.total_score.toFixed(1)
-                          : "—"}
-                      </span>
-                    </td>
-                    <td className="title-col">
-                      <div className="catch-cell">
-                        <div className="catch-thumb">
-                          <img src={thumbnail} alt="" />
+                  return (
+                    <tr
+                      key={entry.id}
+                      className={`leaderboard-row${isLeader ? " leaderboard-row--leader" : ""}`}
+                      onClick={() => handleCatchClick(entry.id)}
+                    >
+                      <td className="rank-col">
+                        <span className="rank-wrapper">
+                          {isLeader ? <Crown className="rank-crown" aria-hidden="true" /> : null}
+                          <span>#{index + 1}</span>
+                        </span>
+                      </td>
+                      <td className="score-col">
+                        <span className="score-chip">
+                          {entry.total_score !== null && entry.total_score !== undefined
+                            ? entry.total_score.toFixed(1)
+                            : "—"}
+                        </span>
+                      </td>
+                      <td className="title-col">
+                        <div className="catch-cell">
+                          <div className="catch-thumb">
+                            <img src={thumbnail} alt="" />
+                          </div>
+                          <span className="catch-title">{entry.title ?? "Untitled catch"}</span>
                         </div>
-                        <span>{entry.title ?? "Untitled catch"}</span>
-                      </div>
-                    </td>
-                    <td className="species-col">{formatSpeciesLabel(entry.species)}</td>
-                    <td className="weight-col hide-md">
-                      {formatWeight(entry.weight, entry.weight_unit)}
-                    </td>
-                    <td className="rating-col hide-md">
-                      {formatRating(entry.avg_rating, entry.rating_count)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      </td>
+                      <td className="species-col">{formatSpeciesLabel(entry.species)}</td>
+                      <td className="weight-col hide-md">
+                        {formatWeight(entry.weight, entry.weight_unit)}
+                      </td>
+                      <td className="rating-col hide-md">
+                        {formatRating(entry.avg_rating, entry.rating_count)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="leaderboard-scroll-hint">Swipe horizontally to see catch stats &raquo;</p>
+        </>
       ) : null}
     </div>
   );

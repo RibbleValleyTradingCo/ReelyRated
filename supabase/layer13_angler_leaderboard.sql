@@ -34,6 +34,7 @@ with catch_ratings as (
   from public.catches c
   left join public.ratings r on r.catch_id = c.id
   where c.visibility = 'public'
+    and c.deleted_at is null
   group by c.id
 ),
 angler_aggregate as (
@@ -154,5 +155,8 @@ order by composite_score desc nulls last;
 
 comment on view public.angler_leaderboard is
   'Leaderboard view combining average ratings, rating counts, and personal best weight/length into a composite angler score.';
+
+alter view public.angler_leaderboard
+  set (security_invoker = true);
 
 commit;

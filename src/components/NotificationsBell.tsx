@@ -9,8 +9,19 @@ import { useNavigate } from "react-router-dom";
 import { useNotifications } from "@/hooks/useNotifications";
 import { NotificationListItem, type NotificationRow } from "@/components/notifications/NotificationListItem";
 import { resolveNotificationPath } from "@/lib/notifications-utils";
+import { cn } from "@/lib/utils";
 
-export const NotificationsBell = () => {
+interface NotificationsBellProps {
+  buttonClassName?: string;
+  iconClassName?: string;
+  badgeClassName?: string;
+}
+
+export const NotificationsBell = ({
+  buttonClassName,
+  iconClassName,
+  badgeClassName,
+}: NotificationsBellProps) => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -117,14 +128,27 @@ export const NotificationsBell = () => {
         <Button
           variant="ghost"
           size="icon"
-          className="relative rounded-full"
+          className={cn(
+            "group relative h-10 w-10 rounded-xl border border-transparent bg-white/0 transition-colors hover:bg-slate-100 md:h-11 md:w-11",
+            buttonClassName,
+          )}
           onClick={() => setOpen((prev) => !prev)}
           aria-label="Open notifications"
           aria-expanded={open}
         >
-          <Bell className="h-5 w-5" />
+          <Bell
+            className={cn(
+              "h-5 w-5 text-slate-600 transition-colors group-hover:text-primary md:h-6 md:w-6",
+              iconClassName,
+            )}
+          />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground">
+            <span
+              className={cn(
+                "absolute -top-1 -right-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-md ring-2 ring-white",
+                badgeClassName,
+              )}
+            >
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}

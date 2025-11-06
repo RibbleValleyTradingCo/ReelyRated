@@ -9,13 +9,13 @@ All colors MUST be HSL.
 @layer base {
   :root {
     --background: 205 100% 98%;
-    --foreground: 210 50% 15%;
+    --foreground: 0 0% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 210 50% 15%;
+    --card-foreground: 0 0% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 210 50% 15%;
+    --popover-foreground: 0 0% 10%;
 
     --primary: 210 95% 45%;
     --primary-foreground: 0 0% 100%;
@@ -42,6 +42,13 @@ All colors MUST be HSL.
     --gradient-subtle: linear-gradient(180deg, hsl(205 100% 98%), hsl(210 100% 95%));
     --shadow-ocean: 0 10px 40px -10px hsl(210 95% 45% / 0.3);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --space-xs: 0.5rem;
+    --space-sm: 1rem;
+    --space-md: 1.5rem;
+    --space-lg: 2rem;
+    --space-xl: 3rem;
+    --space-2xl: 4rem;
   }
 
   .dark {
@@ -86,5 +93,26 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    padding-top: 4rem;
+  }
+
+  @media (min-width: 768px) {
+    body {
+      padding-top: 4.5rem;
+    }
+  }
+}
+
+@layer components {
+  .section {
+    @apply py-12 md:py-16;
+  }
+
+  .section-lg {
+    @apply py-16 md:py-20;
+  }
+
+  .section-container {
+    @apply mx-auto w-full max-w-6xl px-4 md:px-6 lg:px-8;
   }
 }

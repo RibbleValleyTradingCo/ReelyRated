@@ -61,6 +61,7 @@ with base_catches as (
     end as length_cm
   from public.catches c
   where c.visibility = 'public'::public.visibility_type
+    and c.deleted_at is null
 ),
 species_weight_window as (
   select
@@ -201,6 +202,9 @@ order by total_score desc nulls last, fc.created_at desc;
 comment on view public.leaderboard_scores_detailed is
   'Per-catch leaderboard scores combining weight, ratings, evidence, and completeness into a 0–100 composite.';
 
+alter view public.leaderboard_scores_detailed
+  set (security_invoker = true);
+
 -- ---------------------------------------------------------------------------
 -- Helper views for species filtering and homepage highlights.
 -- ---------------------------------------------------------------------------
@@ -211,6 +215,9 @@ order by species, total_score desc nulls last, created_at desc;
 
 comment on view public.leaderboard_by_species is
   'Leaderboard view ordered by species, then total score, for filtered leaderboards.';
+
+alter view public.leaderboard_by_species
+  set (security_invoker = true);
 
 create or replace view public.leaderboard_top_10 as
 select
@@ -229,5 +236,8 @@ limit 10;
 
 comment on view public.leaderboard_top_10 is
   'Lightweight leaderboard slice exposing only the top 10 scored catches.';
+
+alter view public.leaderboard_top_10
+  set (security_invoker = true);
 
 commit;

@@ -172,6 +172,12 @@ left join public.profiles p
 comment on view public.search_catches_view is
   'Helper view for catch search results including owner avatar metadata.';
 
+alter view public.search_profiles_view
+  set (security_invoker = true);
+
+alter view public.search_catches_view
+  set (security_invoker = true);
+
 -- Updated signup trigger to use sanitized usernames -----------------------------
 create or replace function public.handle_new_user()
 returns trigger

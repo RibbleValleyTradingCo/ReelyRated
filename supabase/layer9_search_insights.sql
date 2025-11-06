@@ -18,6 +18,9 @@ from public.profiles p;
 comment on view public.search_profiles_view is
   'Helper view for profile search results (exposes avatar info and bios).';
 
+alter view public.search_profiles_view
+  set (security_invoker = true);
+
 create or replace view public.search_catches_view as
 select
   c.id,
@@ -39,6 +42,9 @@ left join public.profiles p
 comment on view public.search_catches_view is
   'Helper view for catch search results including owner avatar metadata.';
 
+alter view public.search_catches_view
+  set (security_invoker = true);
+
 drop view if exists public.search_venues_view;
 
 create view public.search_venues_view as
@@ -55,6 +61,9 @@ order by c.location, c.created_at desc;
 
 comment on view public.search_venues_view is
   'Helper view for venue discovery (distinct locations with latest catch). Downstream consumers must apply catch visibility filters before display.';
+
+alter view public.search_venues_view
+  set (security_invoker = true);
 
 create or replace view public.catch_insights_view as
 select
@@ -81,6 +90,9 @@ left join public.sessions s
 
 comment on view public.catch_insights_view is
   'Denormalised catch records joined to session metadata for analytics dashboards.';
+
+alter view public.catch_insights_view
+  set (security_invoker = true);
 
 -- Indexes ------------------------------------------------------------------
 create index if not exists profiles_username_trgm_idx

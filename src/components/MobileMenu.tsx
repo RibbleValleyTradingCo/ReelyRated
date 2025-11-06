@@ -1,4 +1,5 @@
 import { type ComponentType, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import LogoMark from "@/components/LogoMark";
@@ -165,11 +166,15 @@ export const MobileMenu = ({ open, onClose, user, onSignOut, onSignIn, onNavigat
         ]
       : [];
 
-  return (
-    <div id={MOBILE_MENU_ID} className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+  return createPortal(
+    <div id={MOBILE_MENU_ID} className="fixed inset-0 z-[60]">
       <div
-        className="relative ml-auto flex h-full w-full max-w-sm flex-col overflow-y-auto bg-card px-5 pb-6 shadow-2xl"
+        className="absolute inset-0 z-[55] bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        className="relative z-[60] ml-auto flex h-full w-full max-w-sm flex-col overflow-y-auto bg-card px-5 pb-6 shadow-2xl"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 1.25rem)" }}
         role="dialog"
         aria-modal="true"
@@ -256,7 +261,8 @@ export const MobileMenu = ({ open, onClose, user, onSignOut, onSignIn, onNavigat
           {renderMenuItems(adminItems, { heading: "Admin" })}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

@@ -31,6 +31,40 @@ begin
 end;
 $$;
 
+alter table public.admin_users enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'admin_users'
+      and policyname = 'Admin roster readable'
+  ) then
+    create policy "Admin roster readable"
+      on public.admin_users
+      for select
+      using (true);
+  end if;
+
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'admin_users'
+      and policyname = 'Admins manage admin roster'
+  ) then
+    create policy "Admins manage admin roster"
+      on public.admin_users
+      for all
+      to authenticated
+      using (public.is_admin(auth.uid()))
+      with check (public.is_admin(auth.uid()));
+  end if;
+end;
+$$;
+
 -- Helper to check admin membership (used in RLS policies)
 create or replace function public.is_admin(check_user uuid)
 returns boolean

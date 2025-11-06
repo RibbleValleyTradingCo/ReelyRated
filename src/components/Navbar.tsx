@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Bell, Menu, Search as SearchIcon, X } from "lucide-react";
+import { Menu, Search as SearchIcon, X } from "lucide-react";
 import { toast } from "sonner";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { isAdminUser } from "@/lib/admin";
 import LogoMark from "@/components/LogoMark";
 import { MobileMenu, MOBILE_MENU_ID } from "@/components/MobileMenu";
+import { cn } from "@/lib/utils";
 
 export const Navbar = () => {
   const { user } = useAuth();
@@ -48,7 +49,7 @@ export const Navbar = () => {
     return () => {
       active = false;
     };
-  }, [user?.id]);
+  }, [user]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -65,47 +66,68 @@ export const Navbar = () => {
     }
   };
 
+  const navLinks = useMemo(
+    () => [
+      { label: "Feed", href: "/feed" },
+      { label: "Leaderboard", href: "/leaderboard" },
+      { label: "Sessions", href: "/sessions" },
+      { label: "Explore", href: "/search" },
+    ],
+    [],
+  );
+
+  const iconButtonBase =
+    "group inline-flex h-10 w-10 items-center justify-center rounded-xl border border-transparent transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-white md:h-11 md:w-11";
+  const iconSvgBase =
+    "h-5 w-5 text-slate-600 transition-colors group-hover:text-primary md:h-6 md:w-6";
+
   const renderAuthIcons = () => (
-    <div className="flex items-center gap-2 overflow-visible">
-      <Button
-        variant="ghost"
-        size="icon"
+    <div className="flex items-center gap-3 md:gap-4">
+      <button
+        type="button"
+        className={iconButtonBase}
         aria-label={isOnSearchRoute ? "Close search" : "Open search"}
         onClick={handleSearchToggle}
       >
-        {isOnSearchRoute ? <X className="h-5 w-5" /> : <SearchIcon className="h-5 w-5" />}
-      </Button>
+        {isOnSearchRoute ? (
+          <X className={iconSvgBase} />
+        ) : (
+          <SearchIcon className={iconSvgBase} />
+        )}
+      </button>
+
       <NotificationsBell />
-      <Button
-        variant="outline"
-        size="icon"
+
+      <button
+        type="button"
+        className={cn(
+          iconButtonBase,
+          "border border-slate-200 hover:bg-slate-100 aria-expanded:shadow-inner",
+        )}
         aria-controls={MOBILE_MENU_ID}
         aria-expanded={menuOpen}
         aria-haspopup="true"
         aria-label="Toggle navigation menu"
         onClick={() => setMenuOpen((prev) => !prev)}
       >
-        {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </Button>
+        {menuOpen ? <X className={iconSvgBase} /> : <Menu className={iconSvgBase} />}
+      </button>
     </div>
   );
 
   const renderGuestActions = () => (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3 md:gap-4">
       <Button
-        variant="ghost"
-        size="icon"
-        aria-label={isOnSearchRoute ? "Close search" : "Open search"}
-        onClick={handleSearchToggle}
+        asChild
+        size="sm"
+        variant="ocean"
+        className="px-4 py-2 shadow-sm transition-transform hover:-translate-y-0.5"
       >
-        {isOnSearchRoute ? <X className="h-5 w-5" /> : <SearchIcon className="h-5 w-5" />}
-      </Button>
-      <Button asChild variant="ocean" size="sm" className="px-4 py-2">
         <Link to="/auth#signup">Sign Up</Link>
       </Button>
       <Link
         to="/auth"
-        className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        className="text-sm font-semibold text-slate-600 transition-colors hover:text-primary"
       >
         Log In
       </Link>
@@ -113,32 +135,59 @@ export const Navbar = () => {
   );
 
   return (
-    <nav className="relative z-20 border-b border-border/70 bg-card">
-      <div className="container mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-6 lg:px-8">
-        <Link to="/" className="flex items-center gap-3">
-          <LogoMark className="h-12 w-12 transition hover:scale-105" />
-          <div className="leading-tight">
-            <span className="block text-base font-semibold tracking-tight text-foreground">
-              ReelyRated
-            </span>
-            <span className="block text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
-              Freshwater Social
-            </span>
-          </div>
-        </Link>
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur">
+      <div className="mx-auto w-full max-w-6xl px-4 md:px-6 lg:px-8">
+        <div className="flex h-16 items-center justify-between gap-4 md:h-[72px]">
+          <Link to="/" className="group flex items-center gap-3">
+            <LogoMark className="h-10 w-10 md:h-11 md:w-11 transition-transform duration-200 hover:scale-105" />
+            <div className="leading-tight">
+              <span className="block text-lg font-semibold text-slate-900 transition-colors group-hover:text-primary md:text-xl">
+                ReelyRated
+              </span>
+              <span className="hidden text-[11px] uppercase tracking-[0.32em] text-slate-500 md:block">
+                Freshwater Social
+              </span>
+            </div>
+          </Link>
 
-        {user ? renderAuthIcons() : renderGuestActions()}
+          <nav className="hidden items-center gap-6 lg:flex">
+            {navLinks.map((link) => {
+              const isActive =
+                link.href === "/"
+                  ? location.pathname === "/"
+                  : location.pathname.startsWith(link.href);
+              return (
+                <Link
+                  key={link.href}
+                  to={link.href}
+                  className={cn(
+                    "text-sm font-medium text-slate-600 transition-colors hover:text-primary",
+                    isActive && "text-primary",
+                  )}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {user ? renderAuthIcons() : renderGuestActions()}
+        </div>
       </div>
 
       {user ? (
         <MobileMenu
           open={menuOpen}
           onClose={() => setMenuOpen(false)}
-          user={{ id: user.id, username: profileUsername ?? user.user_metadata?.username ?? null, isAdmin: isAdminUser(user.id) }}
+          user={{
+            id: user.id,
+            username: profileUsername ?? user.user_metadata?.username ?? null,
+            isAdmin: isAdminUser(user.id),
+          }}
           onSignOut={handleSignOut}
         />
       ) : null}
-    </nav>
+    </header>
   );
 };
 

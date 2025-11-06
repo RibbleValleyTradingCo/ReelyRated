@@ -6,10 +6,18 @@ import "./LeaderboardSection.css";
 import { Leaderboard } from "@/components/Leaderboard";
 import { Button } from "@/components/ui/button";
 
-const LeaderboardSectionComponent = () => (
+interface LeaderboardSectionProps {
+  limit?: number;
+}
+
+const LeaderboardSectionComponent = ({ limit = 10 }: LeaderboardSectionProps) => (
   <section className="leaderboard-section">
     <div className="leaderboard-section__container">
       <header className="leaderboard-section__header">
+        <span className="leaderboard-section__badge">
+          <span className="leaderboard-section__badge-dot" aria-hidden="true" />
+          Live Rankings
+        </span>
         <h2>Angler Leaderboard</h2>
         <p>
           Scores blend catch weight, community ratings, media evidence, and logbook completeness. Discover
@@ -17,7 +25,7 @@ const LeaderboardSectionComponent = () => (
         </p>
       </header>
 
-      <Leaderboard />
+      <Leaderboard limit={limit} />
 
       <div className="leaderboard-section__footer">
         <Button variant="ocean" asChild>
