@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import type { PostgrestSingleResponse } from "@supabase/supabase-js";
+import { sanitizeSearchInput, escapeLikePattern } from "@/lib/security/query-sanitizer";
 
 export type CatchRow = Database["public"]["Tables"]["catches"]["Row"];
 
@@ -124,23 +125,31 @@ export async function searchCatches(
   speciesCandidates: string[] = [],
   client: SupabaseClient = supabase,
 ) {
-  const sanitized = searchTerm.replace(/'/g, "''");
-  const pattern = `%${sanitized}%`;
+  const sanitized = sanitizeSearchInput(searchTerm);
+  if (!sanitized) {
+    return { data: [], error: null, count: null, status: 200, statusText: "OK" };
+  }
 
-  const catchFilters = [
-    `title.ilike.${pattern}`,
-    `location.ilike.${pattern}`,
-    `species.ilike.${pattern}`,
+  const pattern = escapeLikePattern(sanitized);
+  const filters = [
+    `title.ilike.%${pattern}%`,
+    `location.ilike.%${pattern}%`,
+    `species.ilike.%${pattern}%`,
   ];
 
-  if (speciesCandidates.length > 0) {
-    catchFilters.push(`species.in.(${speciesCandidates.join(",")})`);
+  const sanitizedSpecies = speciesCandidates
+    .map((candidate) => sanitizeSearchInput(candidate))
+    .filter(Boolean);
+
+  if (sanitizedSpecies.length > 0) {
+    filters.push(`species.in.(${sanitizedSpecies.join(",")})`);
   }
 
   return client
     .from(CATCHES_TABLE)
     .select(SAFE_CATCH_FIELDS_WITH_RELATIONS)
-    .or(catchFilters.join(","))
+    .or(filters.join(","))
+    .eq("visibility", "public")
     .order("created_at", { ascending: false })
     .limit(limit);
 }

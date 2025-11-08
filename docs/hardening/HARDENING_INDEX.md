@@ -4,7 +4,7 @@
 |-------|------|-------------|--------|---------------|
 | P0 | 2025-11-07 | Baseline audit and CI setup | ✅ | - |
 | P1 | 2025-11-08 | GPS privacy leak fix | ✅ | PRIV-001 |
-| P2 | - | Query injection prevention | ⏳ | SEC-001 |
+| P2 | 2025-11-08 | Query injection prevention | ✅ | SEC-001 |
 | P3 | - | Auth token security | ⏳ | SEC-002 |
 | P4 | - | Security headers deployment | ⏳ | SEC-003, BUILD-001 |
 | P5 | - | Performance optimizations | ⏳ | PERF-001, PERF-002 |

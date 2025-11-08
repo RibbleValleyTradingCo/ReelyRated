@@ -3,6 +3,7 @@ import { UK_FRESHWATER_SPECIES } from "@/lib/freshwater-data";
 import { canViewCatch, shouldShowExactLocation } from "@/lib/visibility";
 import type { Database } from "@/integrations/supabase/types";
 import { searchCatches } from "@/lib/data/catches";
+import { sanitizeSearchInput, escapeLikePattern } from "@/lib/security/query-sanitizer";
 
 export interface SearchProfile {
   id: string;
@@ -64,13 +65,13 @@ export const searchAll = async (
   options: SearchOptions = {}
 ): Promise<SearchResults> => {
   const trimmed = query.trim();
-  if (!trimmed) {
+  const sanitized = sanitizeSearchInput(trimmed);
+  if (!sanitized) {
     return { profiles: [], catches: [], venues: [], errors: [] };
   }
 
-  const sanitized = trimmed.replace(/'/g, "''");
-  const likePattern = `%${sanitized}%`;
-  const lowerTrimmed = trimmed.toLowerCase();
+  const likePattern = `%${escapeLikePattern(sanitized)}%`;
+  const lowerTrimmed = sanitized.toLowerCase();
 
   const {
     profileLimit,
@@ -107,7 +108,7 @@ export const searchAll = async (
     return label.includes(lowerTrimmed) || value.includes(lowerTrimmed);
   }).map((species) => species.value);
 
-  const catchPromise = searchCatches(trimmed, catchLimit, speciesCandidates);
+  const catchPromise = searchCatches(sanitized, catchLimit, speciesCandidates);
 
   const venuesPromise = supabase
     .from("catches")
