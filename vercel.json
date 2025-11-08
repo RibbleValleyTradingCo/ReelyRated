@@ -4,7 +4,6 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "/index.html",
       "headers": {
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
@@ -13,7 +12,14 @@
         "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
         "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
         "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src 'self' fonts.gstatic.com data:; img-src 'self' https: data: blob:; connect-src 'self' *.supabase.co wss://*.supabase.co"
-      }
+      },
+      "continue": true
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
