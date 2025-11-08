@@ -8,10 +8,28 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+if (typeof window !== 'undefined') {
+  const keys = Object.keys(localStorage);
+  keys.forEach((key) => {
+    if (key.includes('supabase') || key.includes('auth')) {
+      console.warn(`🔒 Removing auth token from localStorage: ${key}`);
+      localStorage.removeItem(key);
+    }
+  });
+}
+
+const memoryStorage = {
+  getItem: (_key: string) => null,
+  setItem: (_key: string, _value: string) => {},
+  removeItem: (_key: string) => {},
+};
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: localStorage,
-    persistSession: true,
+    storage: memoryStorage,
+    persistSession: false,
     autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce',
   }
 });
