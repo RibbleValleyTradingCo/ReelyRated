@@ -15,6 +15,7 @@ import { canViewCatch, shouldShowExactLocation } from "@/lib/visibility";
 import { useSearchParams } from "react-router-dom";
 import type { Database } from "@/integrations/supabase/types";
 import { resolveAvatarUrl } from "@/lib/storage";
+import { fetchFeedCatches } from "@/lib/data/catches";
 
 const capitalizeFirstWord = (value: string) => {
   if (!value) return "";
@@ -62,7 +63,7 @@ interface Catch {
   ratings: { rating: number }[];
   comments: { id: string }[];
   reactions: { user_id: string }[] | null;
-  conditions: CatchConditions;
+  conditions?: CatchConditions;
 }
 
 const Feed = () => {
@@ -85,34 +86,27 @@ const Feed = () => {
     }
   }, [user, loading, navigate]);
 
+  const fetchCatches = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await fetchFeedCatches(0, 50);
+      if (error) {
+        throw error;
+      }
+      setCatches((data as Catch[]) || []);
+    } catch (error) {
+      console.error("Error fetching catches:", error);
+      toast.error("Failed to load feed");
+      setCatches([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!user) return;
-
-    const loadCatches = async () => {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from("catches")
-        .select(`
-          *,
-          profiles:user_id (username, avatar_path, avatar_url),
-          ratings (rating),
-          comments:catch_comments (id),
-          reactions:catch_reactions (user_id)
-        `)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        toast.error("Failed to load catches");
-        console.error(error);
-        setCatches([]);
-      } else {
-        setCatches((data as Catch[]) || []);
-      }
-      setIsLoading(false);
-    };
-
-    void loadCatches();
-  }, [user]);
+    void fetchCatches();
+  }, [fetchCatches, user]);
 
   useEffect(() => {
     if (!user) {

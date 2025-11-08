@@ -26,30 +26,40 @@ export const GlobalSearch = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
   const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const trimmedQuery = useMemo(() => debouncedQuery.trim(), [debouncedQuery]);
+
+  const resetResults = () => {
+    setProfiles([]);
+    setCatches([]);
+    setVenues([]);
+    setErrors([]);
+  };
 
   useEffect(() => {
     let active = true;
 
-    if (!user) {
-      setFollowingIds([]);
-      return () => {
-        active = false;
-      };
-    }
+    const loadFollowing = async () => {
+      if (!user) {
+        setFollowingIds([]);
+        return;
+      }
 
-    supabase
-      .from("profile_follows")
-      .select("following_id")
-      .eq("follower_id", user.id)
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error) {
-          console.error("Failed to load following list", error);
-          setFollowingIds([]);
-          return;
-        }
-        setFollowingIds((data ?? []).map((row) => row.following_id));
-      });
+      const { data, error } = await supabase
+        .from("profile_follows")
+        .select("following_id")
+        .eq("follower_id", user.id);
+
+      if (!active) return;
+      if (error) {
+        console.error("Failed to load following list", error);
+        setFollowingIds([]);
+        return;
+      }
+
+      setFollowingIds((data ?? []).map((row) => row.following_id));
+    };
+
+    void loadFollowing();
 
     return () => {
       active = false;
@@ -57,12 +67,8 @@ export const GlobalSearch = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    const trimmed = debouncedQuery.trim();
-    if (!trimmed) {
-      setProfiles([]);
-      setCatches([]);
-      setVenues([]);
-      setErrors([]);
+    if (!trimmedQuery) {
+      resetResults();
       setLoading(false);
       return;
     }
@@ -70,35 +76,38 @@ export const GlobalSearch = () => {
     let active = true;
     setLoading(true);
 
-    searchAll(trimmed, {
-      profileLimit: 5,
-      catchLimit: 5,
-      venueLimit: 8,
-      viewerId: user?.id ?? null,
-      followingIds,
-    })
-      .then((results) => {
+    const performSearch = async () => {
+      try {
+        const results = await searchAll(trimmedQuery, {
+          profileLimit: 5,
+          catchLimit: 5,
+          venueLimit: 8,
+          viewerId: user?.id ?? null,
+          followingIds,
+        });
+
         if (!active) return;
         setProfiles(results.profiles);
         setCatches(results.catches);
         setVenues(results.venues.slice(0, 5));
         setErrors(results.errors.map((err) => `${err.source}: ${err.message}`));
-      })
-      .catch((error) => {
+      } catch (error) {
         if (!active) return;
         console.error("Failed to perform global search", error);
         setErrors(["general: Unable to fetch search results"]);
-      })
-      .finally(() => {
+      } finally {
         if (active) {
           setLoading(false);
         }
-      });
+      }
+    };
+
+    void performSearch();
 
     return () => {
       active = false;
     };
-  }, [debouncedQuery, user?.id, followingIds]);
+  }, [trimmedQuery, user?.id, followingIds]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -135,6 +144,88 @@ export const GlobalSearch = () => {
     navigate(path);
   };
 
+  const renderProfileResults = () =>
+    profiles.length > 0 && (
+      <div className="space-y-2 px-4 py-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Anglers</p>
+        <div className="space-y-1.5">
+          {profiles.map((profile) => (
+            <button
+              key={profile.id}
+              onClick={() => handleNavigate(getProfilePath({ username: profile.username, id: profile.id }))}
+              className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-muted"
+            >
+              <Avatar className="h-8 w-8">
+                <AvatarImage
+                  src={
+                    resolveAvatarUrl({
+                      path: profile.avatar_path,
+                      legacyUrl: profile.avatar_url,
+                    }) ?? ""
+                  }
+                />
+                <AvatarFallback>{profile.username?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">{profile.username}</p>
+                {profile.bio && <p className="truncate text-xs text-muted-foreground">{profile.bio}</p>}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+
+  const renderCatchResults = () =>
+    catches.length > 0 && (
+      <div className="space-y-2 px-4 py-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Catches</p>
+        <div className="space-y-1.5">
+          {catches.map((catchItem) => {
+            const customSpecies = (catchItem.conditions as Record<string, any> | null)?.customFields?.species ?? null;
+            const species = formatSpeciesName(catchItem.species, customSpecies) ?? "Catch";
+            const locationLabel = catchItem.location
+              ? catchItem.location
+              : catchItem.hide_exact_spot
+                ? "Undisclosed venue"
+                : null;
+
+            return (
+              <button
+                key={catchItem.id}
+                onClick={() => handleNavigate(`/catch/${catchItem.id}`)}
+                className="flex w-full flex-col rounded-lg px-2 py-2 text-left transition hover:bg-muted"
+              >
+                <p className="line-clamp-1 text-sm font-medium text-foreground">{catchItem.title}</p>
+                <p className="line-clamp-1 text-xs text-muted-foreground">
+                  {species}
+                  {locationLabel ? ` • ${locationLabel}` : ""}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+
+  const renderVenueResults = () =>
+    venues.length > 0 && (
+      <div className="space-y-2 px-4 py-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Venues</p>
+        <div className="space-y-1.5">
+          {venues.map((venue) => (
+            <button
+              key={venue}
+              onClick={() => handleNavigate(`/venues/${encodeURIComponent(venue)}`)}
+              className="flex w-full flex-col rounded-lg px-2 py-2 text-left transition hover:bg-muted"
+            >
+              <p className="line-clamp-1 text-sm font-medium text-foreground">{venue}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+
   return (
     <div ref={containerRef} className="relative hidden w-full max-w-sm md:block">
       <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -164,7 +255,7 @@ export const GlobalSearch = () => {
           <div className="border-b px-4 py-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-muted-foreground">
-                Search results{debouncedQuery ? ` for “${debouncedQuery}”` : ""}
+                Search results{trimmedQuery ? ` for “${trimmedQuery}”` : ""}
               </span>
               {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
             </div>
@@ -173,113 +264,23 @@ export const GlobalSearch = () => {
             <div className="divide-y">
               {hasResults ? (
                 <>
-                  {profiles.length > 0 && (
-                    <div className="space-y-2 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Anglers
-                      </p>
-                      <div className="space-y-1.5">
-                        {profiles.map((profile) => (
-                          <button
-                            key={profile.id}
-                            onClick={() => handleNavigate(getProfilePath({ username: profile.username, id: profile.id }))}
-                            className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-muted"
-                          >
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage
-                                src={
-                                  resolveAvatarUrl({
-                                    path: profile.avatar_path,
-                                    legacyUrl: profile.avatar_url,
-                                  }) ?? ""
-                                }
-                              />
-                              <AvatarFallback>{profile.username?.[0]?.toUpperCase() ?? "A"}</AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-foreground">
-                                {profile.username}
-                              </p>
-                              {profile.bio && (
-                                <p className="truncate text-xs text-muted-foreground">{profile.bio}</p>
-                              )}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {catches.length > 0 && (
-                    <div className="space-y-2 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Catches
-                      </p>
-                      <div className="space-y-1.5">
-                        {catches.map((catchItem) => {
-                          const customSpecies =
-                            (catchItem.conditions as Record<string, any> | null)?.customFields?.species ??
-                            null;
-                          const species =
-                            formatSpeciesName(catchItem.species, customSpecies) ?? "Catch";
-                          const locationLabel = catchItem.location
-                            ? catchItem.location
-                            : catchItem.hide_exact_spot
-                              ? "Undisclosed venue"
-                              : null;
-
-                          return (
-                            <button
-                              key={catchItem.id}
-                              onClick={() => handleNavigate(`/catch/${catchItem.id}`)}
-                              className="flex w-full flex-col rounded-lg px-2 py-2 text-left transition hover:bg-muted"
-                            >
-                              <p className="line-clamp-1 text-sm font-medium text-foreground">
-                                {catchItem.title}
-                              </p>
-                              <p className="line-clamp-1 text-xs text-muted-foreground">
-                                {species}
-                                {locationLabel ? ` • ${locationLabel}` : ""}
-                              </p>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {venues.length > 0 && (
-                    <div className="space-y-2 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Venues
-                      </p>
-                      <div className="space-y-1.5">
-                        {venues.map((venue) => (
-                          <button
-                            key={venue}
-                            onClick={() => handleNavigate(`/venues/${encodeURIComponent(venue)}`)}
-                            className="flex w-full flex-col rounded-lg px-2 py-2 text-left transition hover:bg-muted"
-                          >
-                            <p className="line-clamp-1 text-sm font-medium text-foreground">{venue}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {renderProfileResults()}
+                  {renderCatchResults()}
+                  {renderVenueResults()}
                 </>
               ) : (
                 <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  {debouncedQuery ? "No results yet. Try another search." : "Start typing to search."}
+                  {trimmedQuery ? "No results yet. Try another search." : "Start typing to search."}
                 </div>
               )}
             </div>
           </ScrollArea>
-          {debouncedQuery && (
+          {trimmedQuery && (
             <div className="space-y-1 border-t px-4 py-2">
               <Button
                 variant="ghost"
                 className="w-full justify-start text-primary"
-                onClick={() => handleNavigate(`/search?q=${encodeURIComponent(debouncedQuery)}`)}
+                onClick={() => handleNavigate(`/search?q=${encodeURIComponent(trimmedQuery)}`)}
               >
                 View all results
               </Button>

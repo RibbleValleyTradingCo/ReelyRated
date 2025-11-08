@@ -55,6 +55,11 @@ const highlightMentions = (text: string) => {
   });
 };
 
+const mentionRegex = /(^|[^a-zA-Z0-9_])@([a-zA-Z0-9_]+)/g;
+
+const getAvatarSrc = (avatar_path?: string | null, avatar_url?: string | null) =>
+  resolveAvatarUrl({ path: avatar_path ?? null, legacyUrl: avatar_url ?? null }) ?? "";
+
 export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId }: CatchCommentsProps) => {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentRow[]>([]);
@@ -92,35 +97,42 @@ export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId
   useEffect(() => {
     let isMounted = true;
 
-    if (!mentionActive) {
-      setMentionSuggestions([]);
-      setMentionLoading(false);
-      return;
-    }
-
-    setMentionLoading(true);
-    const query = supabase
-      .from("profiles")
-      .select("id, username, avatar_path, avatar_url")
-      .limit(5)
-      .neq("id", currentUserId ?? "");
-
-    const request = mentionQuery
-      ? query.ilike("username", `${mentionQuery}%`)
-      : query.order("username", { ascending: true });
-
-    request.then(({ data, error }) => {
-      if (!isMounted) return;
-      if (error || !data) {
-        console.error("Failed to fetch mention suggestions", error);
+    const loadSuggestions = async () => {
+      if (!mentionActive) {
         setMentionSuggestions([]);
-      } else {
-        setMentionSuggestions(data as MentionSuggestion[]);
-        setMentionHighlightIndex(0);
+        setMentionLoading(false);
+        return;
       }
-      setMentionLoading(false);
-    });
 
+      setMentionLoading(true);
+      try {
+        const baseQuery = supabase
+          .from("profiles")
+          .select("id, username, avatar_path, avatar_url")
+          .limit(5)
+          .neq("id", currentUserId ?? "");
+
+        const request = mentionQuery
+          ? baseQuery.ilike("username", `${mentionQuery}%`)
+          : baseQuery.order("username", { ascending: true });
+
+        const { data, error } = await request;
+        if (!isMounted) return;
+        if (error || !data) {
+          console.error("Failed to fetch mention suggestions", error);
+          setMentionSuggestions([]);
+        } else {
+          setMentionSuggestions(data as MentionSuggestion[]);
+          setMentionHighlightIndex(0);
+        }
+      } finally {
+        if (isMounted) {
+          setMentionLoading(false);
+        }
+      }
+    };
+
+    void loadSuggestions();
     return () => {
       isMounted = false;
     };
@@ -200,6 +212,48 @@ export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId
     }
   };
 
+  const notifyCatchOwner = (actorName: string, commentId?: string) => {
+    if (!catchOwnerId || currentUserId === catchOwnerId) return;
+    void createNotification({
+      userId: catchOwnerId,
+      type: "new_comment",
+      payload: {
+        message: `${actorName} commented on your catch "${catchTitle ?? "your catch"}".`,
+        catchId,
+        commentId,
+      },
+    });
+  };
+
+  const notifyMentionedUsers = async (body: string, actorName: string, commentId?: string) => {
+    const mentionMatches = Array.from(new Set(Array.from(body.matchAll(mentionRegex)).map((match) => match[2])));
+    if (mentionMatches.length === 0) return;
+
+    const { data: mentionedProfiles, error: mentionError } = await supabase
+      .from("profiles")
+      .select("id, username")
+      .in("username", mentionMatches);
+
+    if (mentionError || !mentionedProfiles) return;
+
+    await Promise.all(
+      mentionedProfiles
+        .filter((profileRow) => profileRow.id && profileRow.id !== currentUserId)
+        .map((profileRow) =>
+          createNotification({
+            userId: profileRow.id,
+            type: "mention",
+            payload: {
+              message: `${actorName} mentioned you in a comment.`,
+              catchId,
+              commentId,
+              extraData: { catch_title: catchTitle },
+            },
+          })
+        )
+    );
+  };
+
   const handleSubmit = async () => {
     if (!currentUserId) {
       toast.error("You need to sign in to comment.");
@@ -221,56 +275,16 @@ export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId
 
     if (error) {
       toast.error("Failed to post comment");
-    } else {
-      const actorName = user?.user_metadata?.username ?? user?.email ?? "Someone";
-      setNewComment("");
-      resetMentionState();
-      if (catchOwnerId && currentUserId !== catchOwnerId) {
-        void createNotification({
-          userId: catchOwnerId,
-          type: "new_comment",
-          payload: {
-            message: `${actorName} commented on your catch "${catchTitle ?? "your catch"}".`,
-            catchId,
-            commentId: insertedComment?.id,
-          },
-        });
-      }
-
-      const mentionMatches = Array.from(
-        new Set(
-          Array.from(body.matchAll(/(^|[^a-zA-Z0-9_])@([a-zA-Z0-9_]+)/g)).map((match) => match[2])
-        )
-      );
-
-      if (mentionMatches.length > 0) {
-        const { data: mentionedProfiles, error: mentionError } = await supabase
-          .from("profiles")
-          .select("id, username")
-          .in("username", mentionMatches);
-
-        if (!mentionError && mentionedProfiles) {
-          await Promise.all(
-            mentionedProfiles
-              .filter((profileRow) => profileRow.id && profileRow.id !== currentUserId)
-              .map((profileRow) =>
-                createNotification({
-                  userId: profileRow.id,
-                  type: "mention",
-                  payload: {
-                    message: `${actorName} mentioned you in a comment.`,
-                    catchId,
-                    commentId: insertedComment?.id,
-                    extraData: { catch_title: catchTitle },
-                  },
-                })
-              )
-          );
-        }
-      }
-
-      await fetchComments();
+      setIsPosting(false);
+      return;
     }
+
+    const actorName = user?.user_metadata?.username ?? user?.email ?? "Someone";
+    setNewComment("");
+    resetMentionState();
+    notifyCatchOwner(actorName, insertedComment?.id);
+    await notifyMentionedUsers(body, actorName, insertedComment?.id);
+    await fetchComments();
     setIsPosting(false);
   };
 
@@ -314,12 +328,7 @@ export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId
                         >
                           <Avatar className="h-6 w-6">
                             <AvatarImage
-                              src={
-                                resolveAvatarUrl({
-                                  path: suggestion.avatar_path,
-                                  legacyUrl: suggestion.avatar_url,
-                                }) ?? ""
-                              }
+                              src={getAvatarSrc(suggestion.avatar_path, suggestion.avatar_url)}
                             />
                             <AvatarFallback>
                               {suggestion.username?.[0]?.toUpperCase() ?? "A"}
@@ -355,14 +364,7 @@ export const CatchComments = ({ catchId, catchOwnerId, catchTitle, currentUserId
                   aria-label={`View ${comment.profiles?.username ?? "angler"}'s profile`}
                 >
                   <Avatar className="h-9 w-9">
-                    <AvatarImage
-                      src={
-                        resolveAvatarUrl({
-                          path: comment.profiles?.avatar_path ?? null,
-                          legacyUrl: comment.profiles?.avatar_url ?? null,
-                        }) ?? ""
-                      }
-                    />
+                    <AvatarImage src={getAvatarSrc(comment.profiles?.avatar_path, comment.profiles?.avatar_url)} />
                     <AvatarFallback>
                       {comment.profiles?.username?.[0]?.toUpperCase() ?? "A"}
                     </AvatarFallback>
