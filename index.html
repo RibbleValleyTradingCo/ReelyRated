@@ -9,6 +9,43 @@
     <meta name="description" content="Track freshwater fishing sessions, share your catches, and follow fellow UK anglers on ReelyRated." />
     <meta name="author" content="ReelyRated" />
 
+    <!-- Content Security Policy (prevents XSS attacks) -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+        default-src 'self';
+        script-src 'self' https://cdn.jsdelivr.net;
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src 'self' https://fonts.gstatic.com;
+        img-src 'self' https: data:;
+        connect-src 'self' https://*.supabase.co;
+        frame-ancestors 'none';
+        base-uri 'self';
+        form-action 'self'
+      "
+    />
+
+    <!-- Referrer Policy (don't leak referrer to external sites) -->
+    <meta name="referrer" content="same-origin" />
+
+    <!-- Permissions Policy (disable camera, mic, geolocation by default) -->
+    <meta
+      http-equiv="Permissions-Policy"
+      content="
+        camera=(),
+        microphone=(),
+        geolocation=(),
+        usb=(),
+        magnetometer=(),
+        gyroscope=(),
+        accelerometer=()
+      "
+    />
+
+    <!-- Compatibility & MIME protections -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+
     <meta property="og:title" content="ReelyRated • Freshwater Sessions & Stories" />
     <meta property="og:description" content="Track freshwater fishing sessions, share your catches, and follow fellow UK anglers on ReelyRated." />
     <meta property="og:type" content="website" />
