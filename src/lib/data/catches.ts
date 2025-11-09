@@ -47,6 +47,7 @@ export const SAFE_CATCH_FIELDS_WITH_RELATIONS = `${SAFE_CATCH_FIELDS}, ${RELATIO
 const FULL_CATCH_SELECT = `*, ${RELATION_SELECTIONS}`;
 
 const CATCHES_TABLE = "catches";
+const CATCHES_SAFE_VIEW = "catches_safe";
 
 type SupabaseClient = typeof supabase;
 
@@ -73,36 +74,12 @@ type CatchWithRelations = CatchRow & {
 
 export async function fetchCatchForViewer(
   catchId: string,
-  viewerId: string | null,
+  _viewerId: string | null,
   client: SupabaseClient = supabase,
 ): Promise<PostgrestSingleResponse<CatchWithRelations>> {
-  const { data: privacyRow, error: privacyError } = await client
-    .from(CATCHES_TABLE)
-    .select("user_id, hide_exact_spot")
-    .eq("id", catchId)
-    .single();
-
-  if (privacyError || !privacyRow) {
-    return {
-      data: null,
-      error: privacyError ?? {
-        code: "404",
-        details: "Catch not found",
-        hint: null,
-        message: "Catch not found",
-      },
-      status: 404,
-      statusText: "Not Found",
-      count: null,
-    };
-  }
-
-  const isOwner = Boolean(viewerId && privacyRow.user_id === viewerId);
-  const selectFields = isOwner || !privacyRow.hide_exact_spot ? FULL_CATCH_SELECT : SAFE_CATCH_FIELDS_WITH_RELATIONS;
-
   return client
-    .from(CATCHES_TABLE)
-    .select(selectFields)
+    .from(CATCHES_SAFE_VIEW)
+    .select(FULL_CATCH_SELECT)
     .eq("id", catchId)
     .single();
 }

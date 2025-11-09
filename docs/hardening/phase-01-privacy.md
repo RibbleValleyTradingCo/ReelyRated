@@ -12,6 +12,7 @@ The application was fetching all columns (`*`) from the catches table, exposing 
 3. Implemented `fetchCatchForViewer()` that checks ownership before including GPS
 4. Updated Feed and CatchDetail pages to use safe fetching methods
 5. Added test coverage for privacy protection
+6. Introduced a `catches_safe` database view that strips `conditions.gps` for non-owners, ensuring privacy at the database layer
 
 ## Security Principle
 "Principle of Least Privilege" - Only expose data that the viewer is authorized to see. GPS coordinates are sensitive PII and should only be visible to catch owners when privacy mode is enabled.

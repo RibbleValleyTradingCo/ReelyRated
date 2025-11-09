@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Chrome } from "lucide-react";
 import LogoMark from "@/components/LogoMark";
+import { buildOAuthRedirectUrl } from "@/lib/auth/helpers";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -53,7 +54,7 @@ const Auth = () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: buildOAuthRedirectUrl(),
       },
     });
 

@@ -542,7 +542,54 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      catches_safe: {
+        Row: {
+          allow_ratings: boolean | null
+          bait_used: string | null
+          caught_at: string | null
+          conditions: Json | null
+          created_at: string
+          description: string | null
+          equipment_used: string | null
+          gallery_photos: string[] | null
+          hide_exact_spot: boolean | null
+          id: string
+          image_url: string
+          length: number | null
+          length_unit: Database["public"]["Enums"]["length_unit"] | null
+          location: string | null
+          method: string | null
+          peg_or_swim: string | null
+          species: Database["public"]["Enums"]["species_type"] | null
+          session_id: string | null
+          tags: string[] | null
+          time_of_day: Database["public"]["Enums"]["time_of_day"] | null
+          title: string
+          updated_at: string
+          user_id: string
+          video_url: string | null
+          visibility: Database["public"]["Enums"]["visibility_type"] | null
+          water_type: string | null
+          weight: number | null
+          weight_unit: Database["public"]["Enums"]["weight_unit"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catches_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catches_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       create_notification: {
