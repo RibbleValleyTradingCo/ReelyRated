@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchCatchForViewer, fetchFeedCatches, SAFE_CATCH_FIELDS } from "../catches";
 
 type Builder = {
@@ -57,7 +58,7 @@ describe("Catch Privacy Protection", () => {
     ];
     const client = createMockClient(builders);
 
-    const result = await fetchCatchForViewer("catch-1", "viewer-2", client as any);
+    const result = await fetchCatchForViewer("catch-1", "viewer-2", client as unknown as SupabaseClient);
 
     expect(selectSpy).toHaveBeenCalledTimes(1);
     const selectionArg = selectSpy.mock.calls[0][0] as string;
@@ -74,7 +75,7 @@ describe("Catch Privacy Protection", () => {
     ];
     const client = createMockClient(builders);
 
-    const response = await fetchFeedCatches(0, 10, client as any);
+    const response = await fetchFeedCatches(0, 10, client as unknown as SupabaseClient);
 
     expect(selectSpy).toHaveBeenCalledTimes(1);
     const selectionArg = selectSpy.mock.calls[0][0] as string;

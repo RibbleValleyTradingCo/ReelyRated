@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/components/AuthProvider";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -12,10 +12,11 @@ import { Star, MessageCircle, Fish, Heart } from "lucide-react";
 import { toast } from "sonner";
 import { UK_FRESHWATER_SPECIES, getFreshwaterSpeciesLabel } from "@/lib/freshwater-data";
 import { canViewCatch, shouldShowExactLocation } from "@/lib/visibility";
-import { useSearchParams } from "react-router-dom";
 import type { Database } from "@/integrations/supabase/types";
 import { resolveAvatarUrl } from "@/lib/storage";
 import { fetchFeedCatches } from "@/lib/data/catches";
+import { usePagination } from "@/hooks/usePagination";
+import { LoadingSpinner } from "@/components/LoadingSpinner";
 
 const capitalizeFirstWord = (value: string) => {
   if (!value) return "";
@@ -72,13 +73,23 @@ const Feed = () => {
   const [searchParams] = useSearchParams();
   const [catches, setCatches] = useState<Catch[]>([]);
   const [filteredCatches, setFilteredCatches] = useState<Catch[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [speciesFilter, setSpeciesFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("newest");
   const [customSpeciesFilter, setCustomSpeciesFilter] = useState("");
   const [feedScope, setFeedScope] = useState<"all" | "following">("all");
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const sessionFilter = searchParams.get("session");
+  const {
+    page,
+    pageSize,
+    hasMore,
+    isLoading,
+    setHasMore,
+    setIsLoading,
+    nextPage,
+    reset,
+  } = usePagination({ pageSize: 20 });
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -86,22 +97,40 @@ const Feed = () => {
     }
   }, [user, loading, navigate]);
 
+  const filterKey = useMemo(
+    () =>
+      JSON.stringify({
+        feedScope,
+        speciesFilter,
+        customSpeciesFilter,
+        sessionFilter,
+        userId: user?.id ?? null,
+        followingIds: feedScope === "following" ? followingIds : [],
+      }),
+    [feedScope, speciesFilter, customSpeciesFilter, sessionFilter, followingIds, user?.id],
+  );
+
   const fetchCatches = useCallback(async () => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      const { data, error } = await fetchFeedCatches(0, 50);
+      const { data, error } = await fetchFeedCatches(page, pageSize);
       if (error) {
         throw error;
       }
-      setCatches((data as Catch[]) || []);
+      const nextData = (data as Catch[]) ?? [];
+      setCatches((prev) => (page === 0 ? nextData : [...prev, ...nextData]));
+      setHasMore(nextData.length === pageSize);
     } catch (error) {
       console.error("Error fetching catches:", error);
       toast.error("Failed to load feed");
-      setCatches([]);
+      if (page === 0) {
+        setCatches([]);
+      }
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [page, pageSize, setHasMore, setIsLoading, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -193,6 +222,31 @@ const Feed = () => {
     }
   }, [speciesFilter, customSpeciesFilter]);
 
+  useEffect(() => {
+    setCatches([]);
+    reset();
+  }, [filterKey, reset]);
+
+  useEffect(() => {
+    if (!hasMore) return;
+    const node = loadMoreRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && hasMore && !isLoading) {
+            nextPage();
+          }
+        });
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, isLoading, nextPage]);
+
+  const initialLoading = isLoading && catches.length === 0;
+
   const calculateAverageRating = (ratings: { rating: number }[]) => {
     if (ratings.length === 0) return "0";
     const sum = ratings.reduce((acc, r) => acc + r.rating, 0);
@@ -216,11 +270,13 @@ const Feed = () => {
     return `${weight}${unit === 'kg' ? 'kg' : 'lb'}`;
   };
 
-  if (loading || isLoading) {
+  if (loading || initialLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-muted">
         <Navbar />
-        <div className="container mx-auto px-4 py-8">Loading...</div>
+        <div className="container mx-auto px-4 py-8">
+          <LoadingSpinner />
+        </div>
       </div>
     );
   }
@@ -361,21 +417,39 @@ const Feed = () => {
             </Card>
           ))}
         </div>
-        {filteredCatches.length === 0 && (
+        {catches.length === 0 && !initialLoading && (
           <div className="text-center py-12">
             <p className="text-muted-foreground mb-4">
-              {catches.length === 0
-                ? "No catches yet. Be the first to share!"
-                : sessionFilter
-                  ? "No catches logged for this session yet."
-                  : feedScope === "following"
-                    ? "No catches from anglers you follow yet. Explore the full feed or follow more people."
-                    : "No catches match your filters"}
+              No catches yet. Be the first to share!
             </p>
-            <Button variant="ocean" onClick={() => navigate("/add-catch")}>
+            <Button variant="ocean" onClick={() => navigate("/add-catch")} disabled={!user}>
               Log Your First Catch
             </Button>
           </div>
+        )}
+
+        {filteredCatches.length === 0 && catches.length > 0 && (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground mb-4">
+              {sessionFilter
+                ? "No catches logged for this session yet."
+                : feedScope === "following"
+                  ? "No catches from anglers you follow yet. Explore the full feed or follow more people."
+                  : "No catches match your filters"}
+            </p>
+          </div>
+        )}
+
+        {hasMore && <div ref={loadMoreRef} className="h-2 w-full" aria-hidden="true" />}
+
+        {isLoading && catches.length > 0 && (
+          <div className="py-8">
+            <LoadingSpinner />
+          </div>
+        )}
+
+        {!hasMore && catches.length > 0 && (
+          <p className="py-8 text-center text-sm text-muted-foreground">No more catches to load</p>
         )}
       </div>
     </div>

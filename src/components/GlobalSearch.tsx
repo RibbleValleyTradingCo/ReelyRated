@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Loader2, Search as SearchIcon } from "lucide-react";
 import { formatSpeciesName, searchAll, type SearchCatch, type SearchProfile } from "@/lib/search";
-import { useAuth } from "@/components/AuthProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveAvatarUrl } from "@/lib/storage";
 import { getProfilePath } from "@/lib/profile";
@@ -25,6 +25,7 @@ export const GlobalSearch = () => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const trimmedQuery = useMemo(() => debouncedQuery.trim(), [debouncedQuery]);
 
@@ -39,7 +40,7 @@ export const GlobalSearch = () => {
     let active = true;
 
     const loadFollowing = async () => {
-      if (!user) {
+      if (!userId) {
         setFollowingIds([]);
         return;
       }
@@ -47,7 +48,7 @@ export const GlobalSearch = () => {
       const { data, error } = await supabase
         .from("profile_follows")
         .select("following_id")
-        .eq("follower_id", user.id);
+        .eq("follower_id", userId);
 
       if (!active) return;
       if (error) {
@@ -64,7 +65,7 @@ export const GlobalSearch = () => {
     return () => {
       active = false;
     };
-  }, [user?.id]);
+  }, [userId]);
 
   useEffect(() => {
     if (!trimmedQuery) {
@@ -82,7 +83,7 @@ export const GlobalSearch = () => {
           profileLimit: 5,
           catchLimit: 5,
           venueLimit: 8,
-          viewerId: user?.id ?? null,
+          viewerId: userId,
           followingIds,
         });
 
@@ -107,7 +108,7 @@ export const GlobalSearch = () => {
     return () => {
       active = false;
     };
-  }, [trimmedQuery, user?.id, followingIds]);
+  }, [trimmedQuery, userId, followingIds]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -182,7 +183,11 @@ export const GlobalSearch = () => {
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Catches</p>
         <div className="space-y-1.5">
           {catches.map((catchItem) => {
-            const customSpecies = (catchItem.conditions as Record<string, any> | null)?.customFields?.species ?? null;
+            type CatchConditionsPayload = {
+              customFields?: { species?: string | null };
+            };
+            const customFields = catchItem.conditions as CatchConditionsPayload | null;
+            const customSpecies = customFields?.customFields?.species ?? null;
             const species = formatSpeciesName(catchItem.species, customSpecies) ?? "Catch";
             const locationLabel = catchItem.location
               ? catchItem.location

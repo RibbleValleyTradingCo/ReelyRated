@@ -4,7 +4,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
 import { Navbar } from "@/components/Navbar";
-import { useAuth } from "@/components/AuthProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { isAdminUser } from "@/lib/admin";
 import { getProfilePath } from "@/lib/profile";
 import { supabase } from "@/integrations/supabase/client";

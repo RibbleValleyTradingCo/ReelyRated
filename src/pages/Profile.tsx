@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { useAuth } from "@/components/AuthProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -307,55 +307,39 @@ const Profile = () => {
   const statIconClasses =
     "flex h-10 w-10 items-center justify-center rounded-full bg-sky-500/10 text-sky-500";
 
-  const profileStatCards = (stats: {
-    total: number;
-    avgRating: string;
-    heaviestCatch: Catch | null;
-    topSpecies: { species: string; count: number } | null;
-  }) => [
-    {
-      label: "Total catches",
-      value: stats.total ?? 0,
-      hint: stats.total > 0 ? null : "Log your first catch",
-      icon: <Fish className="h-5 w-5" />,
-    },
-    {
-      label: "Average rating",
-      value: stats.avgRating !== "-" ? stats.avgRating : "–",
-      hint:
-        stats.avgRating !== "-"
-          ? null
-          : "Ratings will appear once others review your catches.",
-      icon: <Star className="h-5 w-5" />,
-    },
-    {
-      label: "Heaviest catch",
-      value: stats.heaviestCatch
-        ? formatWeight(stats.heaviestCatch.weight, stats.heaviestCatch.weight_unit)
-        : "–",
-      hint: stats.heaviestCatch ? null : "Add weights to your catches to track PBs.",
-      icon: <Trophy className="h-5 w-5" />,
-    },
-    {
-      label: "Top species",
-      value: stats.topSpecies
-        ? `${formatSpecies(stats.topSpecies.species)} (${stats.topSpecies.count})`
-        : "–",
-      hint: stats.topSpecies ? null : "No catches yet — species will appear here.",
-      icon: <BarChart3 className="h-5 w-5" />,
-    },
-  ];
+  const statsCards = useMemo(() => {
+    const { total, avgRating, heaviestCatch, topSpecies } = overallStats;
 
-  const statsCards = useMemo(
-    () =>
-      profileStatCards({
-        total: overallStats.total,
-        avgRating: overallStats.avgRating,
-        heaviestCatch: overallStats.heaviestCatch,
-        topSpecies: overallStats.topSpecies,
-      }),
-    [overallStats]
-  );
+    return [
+      {
+        label: "Total catches",
+        value: total ?? 0,
+        hint: total > 0 ? null : "Log your first catch",
+        icon: <Fish className="h-5 w-5" />,
+      },
+      {
+        label: "Average rating",
+        value: avgRating !== "-" ? avgRating : "–",
+        hint:
+          avgRating !== "-"
+            ? null
+            : "Ratings will appear once others review your catches.",
+        icon: <Star className="h-5 w-5" />,
+      },
+      {
+        label: "Heaviest catch",
+        value: heaviestCatch ? formatWeight(heaviestCatch.weight, heaviestCatch.weight_unit) : "–",
+        hint: heaviestCatch ? null : "Add weights to your catches to track PBs.",
+        icon: <Trophy className="h-5 w-5" />,
+      },
+      {
+        label: "Top species",
+        value: topSpecies ? `${formatSpecies(topSpecies.species)} (${topSpecies.count})` : "–",
+        hint: topSpecies ? null : "No catches yet — species will appear here.",
+        icon: <BarChart3 className="h-5 w-5" />,
+      },
+    ];
+  }, [overallStats]);
 
   if (isNotFound) {
     return <ProfileNotFound />;

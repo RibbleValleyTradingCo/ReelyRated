@@ -1,4 +1,4 @@
-import { useAuth } from "@/components/AuthProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { HeroLeaderboardSpotlight } from "@/components/HeroLeaderboardSpotlight";
 import { LeaderboardSection } from "@/components/LeaderboardSection";
 import { Navbar } from "@/components/Navbar";

@@ -112,11 +112,13 @@ export async function fetchFeedCatches(
   pageSize = 20,
   client: SupabaseClient = supabase,
 ) {
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
   return client
     .from(CATCHES_TABLE)
-    .select(SAFE_CATCH_FIELDS_WITH_RELATIONS)
+    .select(SAFE_CATCH_FIELDS_WITH_RELATIONS, { count: "exact" })
     .order("created_at", { ascending: false })
-    .range(page * pageSize, (page + 1) * pageSize - 1);
+    .range(from, to);
 }
 
 export async function searchCatches(
