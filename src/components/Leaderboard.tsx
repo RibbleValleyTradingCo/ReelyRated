@@ -1,7 +1,7 @@
-import heroFish from "@/assets/hero-fish.jpg";
+import heroFishFull from "@/assets/hero-fish.jpg";
+import heroFishLarge from "@/assets/hero-fish-1400.jpg";
+import heroFishMedium from "@/assets/hero-fish-800.jpg";
 import { useLeaderboardRealtime } from "@/hooks/useLeaderboardRealtime";
-import { getFreshwaterSpeciesLabel } from "@/lib/freshwater-data";
-import { supabase } from "@/integrations/supabase/client";
 import { Crown } from "lucide-react";
 import {
   memo,
@@ -14,23 +14,22 @@ import {
 import { useNavigate } from "react-router-dom";
 
 import "./Leaderboard.css";
+import { formatSpeciesLabel } from "@/lib/formatters/species";
+import { formatWeightLabel } from "@/lib/formatters/weights";
 
-const formatSpeciesLabel = (species: string | null) => {
-  if (!species) return "Unknown";
-  if (species === "other") return "Other";
-  return getFreshwaterSpeciesLabel(species) ?? species.replace(/_/g, " ");
-};
-
-const formatWeight = (weight: number | null, unit: string | null) => {
-  if (weight === null || weight === undefined) return "—";
-  if (!unit) return `${weight}`;
-  return `${weight} ${unit}`;
-};
+const HERO_FISH_SRCSET = `${heroFishMedium} 800w, ${heroFishLarge} 1400w, ${heroFishFull} 1920w`;
+const HERO_FISH_SIZES = "(max-width: 768px) 70vw, 320px";
 
 const formatRating = (avg: number | null, count: number | null) => {
   if (!count || count <= 0 || avg === null) return "—";
   return `⭐ ${avg.toFixed(1)} (${count})`;
 };
+
+const formatCatchWeight = (weight: number | null, unit: string | null) =>
+  formatWeightLabel(weight, unit, {
+    fallback: "—",
+    maximumFractionDigits: Number.isInteger(weight ?? 0) ? 0 : 1,
+  }) || "—";
 
 interface LeaderboardProps {
   limit?: number;
@@ -203,8 +202,9 @@ const LeaderboardComponent = ({ limit = 50 }: LeaderboardProps) => {
                   const thumbnail =
                     (entry.gallery_photos && entry.gallery_photos[0]) ||
                     entry.image_url ||
-                    heroFish;
+                    heroFishFull;
                   const isLeader = index === 0;
+                  const usesFallbackImage = thumbnail === heroFishFull;
 
                   return (
                     <tr
@@ -226,16 +226,22 @@ const LeaderboardComponent = ({ limit = 50 }: LeaderboardProps) => {
                         </span>
                       </td>
                       <td className="title-col">
-                        <div className="catch-cell">
-                          <div className="catch-thumb">
-                            <img src={thumbnail} alt="" />
+                          <div className="catch-cell">
+                            <div className="catch-thumb">
+                              <img
+                                src={thumbnail}
+                                alt={entry.title ?? formatSpeciesLabel(entry.species)}
+                                loading="lazy"
+                                decoding="async"
+                                {...(usesFallbackImage ? { srcSet: HERO_FISH_SRCSET, sizes: HERO_FISH_SIZES } : {})}
+                              />
+                            </div>
+                            <span className="catch-title">{entry.title ?? "Untitled catch"}</span>
                           </div>
-                          <span className="catch-title">{entry.title ?? "Untitled catch"}</span>
-                        </div>
                       </td>
                       <td className="species-col">{formatSpeciesLabel(entry.species)}</td>
                       <td className="weight-col hide-md">
-                        {formatWeight(entry.weight, entry.weight_unit)}
+                        {formatCatchWeight(entry.weight, entry.weight_unit)}
                       </td>
                       <td className="rating-col hide-md">
                         {formatRating(entry.avg_rating, entry.rating_count)}

@@ -1,9 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fetchCatchForViewer, fetchFeedCatches, SAFE_CATCH_FIELDS, SAFE_CATCH_FIELDS_WITH_RELATIONS } from "../catches";
+import {
+  fetchCatchForViewer,
+  fetchFeedCatches,
+  SAFE_CATCH_FIELDS,
+  SAFE_CATCH_FIELDS_WITH_RELATIONS,
+  FEED_CATCH_SELECTION,
+} from "../catches";
 
 describe("Catch data helpers", () => {
-  it("reads catch detail data from the catches_safe view", async () => {
+  it("reads catch detail data from catches table with relations", async () => {
     const singleResponse = { data: { id: "catch-1" }, error: null } as const;
     const single = vi.fn().mockResolvedValue(singleResponse);
     const eq = vi.fn().mockReturnValue({ single });
@@ -13,7 +19,7 @@ describe("Catch data helpers", () => {
     const client = { from } as unknown as SupabaseClient;
     const result = await fetchCatchForViewer("catch-1", "viewer-2", client);
 
-    expect(from).toHaveBeenCalledWith("catches_safe");
+    expect(from).toHaveBeenCalledWith("catches");
     expect(select).toHaveBeenCalledWith(expect.stringContaining("profiles:user_id"));
     expect(eq).toHaveBeenCalledWith("id", "catch-1");
     expect(result).toBe(singleResponse);
@@ -29,7 +35,7 @@ describe("Catch data helpers", () => {
     const response = await fetchFeedCatches(0, 10, client);
 
     expect(from).toHaveBeenCalledWith("catches");
-    expect(select.mock.calls[0][0]).toBe(SAFE_CATCH_FIELDS_WITH_RELATIONS);
+    expect(select.mock.calls[0][0]).toBe(FEED_CATCH_SELECTION);
     expect(select.mock.calls[0][1]).toEqual({ count: "exact" });
     expect(response.data?.[0].id).toBe("catch-2");
   });

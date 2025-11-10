@@ -2,11 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Crown, Fish, Sparkles, Trophy } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
-import heroFish from "@/assets/hero-fish.jpg";
+import heroFishFull from "@/assets/hero-fish.jpg";
+import heroFishLarge from "@/assets/hero-fish-1400.jpg";
+import heroFishMedium from "@/assets/hero-fish-800.jpg";
 import { supabase } from "@/integrations/supabase/client";
-import { getFreshwaterSpeciesLabel } from "@/lib/freshwater-data";
 import { getProfilePath } from "@/lib/profile";
 import { cn } from "@/lib/utils";
+import { formatSpeciesLabel } from "@/lib/formatters/species";
+import { formatWeightLabel } from "@/lib/formatters/weights";
+import { formatRelativeTime } from "@/lib/formatters/dates";
 
 interface TopCatch {
   id: string;
@@ -49,44 +53,13 @@ const STATS_BAR_THEMES = [
   },
 ] as const;
 
+const HERO_FISH_SRCSET = `${heroFishMedium} 800w, ${heroFishLarge} 1400w, ${heroFishFull} 1920w`;
+const HERO_FISH_SIZES = "(max-width: 768px) 90vw, (max-width: 1280px) 70vw, 960px";
+
 const toNumber = (value: unknown): number | null => {
   if (value === null || value === undefined) return null;
   const parsed = Number(value);
   return Number.isNaN(parsed) ? null : parsed;
-};
-
-const formatWeight = (weight: number | null, unit: string | null) => {
-  if (weight === null || weight === undefined) return null;
-  if (!unit) return `${weight}`;
-  return `${weight} ${unit}`;
-};
-
-const formatSpecies = (species: string | null) => {
-  if (!species) return "Unknown species";
-  if (species === "other") return "Other species";
-  return getFreshwaterSpeciesLabel(species) ?? species.replace(/_/g, " ");
-};
-
-const formatRelativeTime = (iso: string | null) => {
-  if (!iso) return "Moments ago";
-  const created = new Date(iso);
-  if (Number.isNaN(created.getTime())) return "Recently";
-  const diff = Date.now() - created.getTime();
-  const minute = 60 * 1000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-
-  if (diff < minute) return "Just now";
-  if (diff < hour) {
-    const mins = Math.round(diff / minute);
-    return `${mins} min${mins === 1 ? "" : "s"} ago`;
-  }
-  if (diff < day) {
-    const hrs = Math.round(diff / hour);
-    return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
-  }
-  const days = Math.round(diff / day);
-  return `${days} day${days === 1 ? "" : "s"} ago`;
 };
 
 export const HeroLeaderboardSpotlight = () => {
@@ -245,7 +218,11 @@ export const HeroLeaderboardSpotlight = () => {
     topCatch.total_score !== null && topCatch.total_score !== undefined
       ? topCatch.total_score.toFixed(1)
       : "—";
-  const weightLabel = formatWeight(topCatch.weight, topCatch.weight_unit) ?? "—";
+  const weightLabel =
+    formatWeightLabel(topCatch.weight, topCatch.weight_unit, {
+      fallback: "",
+      maximumFractionDigits: Number.isInteger(topCatch.weight ?? 0) ? 0 : 1,
+    }) || "—";
   const hasRatings =
     topCatch.rating_count && topCatch.rating_count > 0 && topCatch.avg_rating !== null;
   const ratingValue =
@@ -261,9 +238,12 @@ export const HeroLeaderboardSpotlight = () => {
           .toUpperCase()
       : "RR";
   const relativeTime = formatRelativeTime(topCatch.created_at);
-  const speciesLabel = formatSpecies(topCatch.species);
+  const speciesLabel = formatSpeciesLabel(topCatch.species);
   const usernameDisplay = angler?.username ? `@${angler.username}` : "ReelyRated";
   const statsTheme = STATS_BAR_THEMES[statsThemeIndex] ?? STATS_BAR_THEMES[0];
+  const fallbackImageProps = topCatch.image_url
+    ? {}
+    : { srcSet: HERO_FISH_SRCSET, sizes: HERO_FISH_SIZES };
 
   return (
     <div className="motion-safe:animate-in motion-safe:fade-in-50 motion-safe:slide-in-from-right-6 motion-safe:duration-500">
@@ -277,10 +257,12 @@ export const HeroLeaderboardSpotlight = () => {
       <div className="group relative cursor-pointer overflow-hidden rounded-3xl shadow-2xl transition-all duration-500 hover:shadow-[0_35px_60px_-15px_rgba(30,64,175,0.35)]">
         <div className="relative h-64 overflow-hidden bg-slate-200 md:h-72">
           <img
-            src={topCatch.image_url ?? heroFish}
+            src={topCatch.image_url ?? heroFishFull}
             alt={topCatch.title ?? speciesLabel}
-            className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
             loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+            {...fallbackImageProps}
           />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-900/45 via-slate-900/0 to-transparent md:from-slate-900/35" />
 

@@ -1,27 +1,20 @@
-import heroFish from "@/assets/hero-fish.jpg";
+import heroFishFull from "@/assets/hero-fish.jpg";
+import heroFishLarge from "@/assets/hero-fish-1400.jpg";
+import heroFishMedium from "@/assets/hero-fish-800.jpg";
 import "@/components/Leaderboard.css";
 import { Navbar } from "@/components/Navbar";
 import { useLeaderboardRealtime } from "@/hooks/useLeaderboardRealtime";
-import { getFreshwaterSpeciesLabel } from "@/lib/freshwater-data";
 import { getProfilePath } from "@/lib/profile";
 import { Crown } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
+import { extractCustomSpecies, formatSpeciesLabel } from "@/lib/formatters/species";
+import { formatWeightLabel } from "@/lib/formatters/weights";
 
 const dateFormatter = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" });
 
-const formatSpeciesLabel = (species: string | null, custom?: string | null) => {
-  if (custom) return custom;
-  if (!species) return "Unknown";
-  if (species === "other") return "Other";
-  return getFreshwaterSpeciesLabel(species) ?? species.replace(/_/g, " ");
-};
-
-const formatWeight = (weight: number | null, unit: string | null) => {
-  if (weight === null || weight === undefined) return "—";
-  if (!unit) return `${weight}`;
-  return `${weight} ${unit}`;
-};
+const HERO_FISH_SRCSET = `${heroFishMedium} 800w, ${heroFishLarge} 1400w, ${heroFishFull} 1920w`;
+const HERO_FISH_SIZES = "(max-width: 768px) 70vw, 320px";
 
 const formatLength = (length: number | null, unit: string | null) => {
   if (length === null || length === undefined) return "—";
@@ -37,9 +30,13 @@ const formatDate = (iso: string | null) => {
 };
 
 const getThumbnail = (gallery: string[] | null, fallback?: string | null) => {
-  if (gallery && gallery.length > 0) return gallery[0];
-  if (fallback) return fallback;
-  return heroFish;
+  if (gallery && gallery.length > 0) {
+    return { src: gallery[0], srcSet: undefined, sizes: undefined };
+  }
+  if (fallback) {
+    return { src: fallback, srcSet: undefined, sizes: undefined };
+  }
+  return { src: heroFishFull, srcSet: HERO_FISH_SRCSET, sizes: HERO_FISH_SIZES };
 };
 
 const parseConditions = (conditions: unknown) => {
@@ -47,8 +44,7 @@ const parseConditions = (conditions: unknown) => {
   const data = conditions as Record<string, unknown>;
   const customFields = (data.customFields as Record<string, unknown> | undefined) ?? {};
   return {
-    customSpecies:
-      typeof customFields.species === "string" ? (customFields.species as string) : null,
+    customSpecies: extractCustomSpecies(conditions),
     customMethod:
       typeof customFields.method === "string" ? (customFields.method as string) : null,
     customLocationLabel:
@@ -74,8 +70,12 @@ const LeaderboardPage = () => {
         thumbnail: getThumbnail(entry.gallery_photos, entry.image_url),
         anglerUsername: entry.owner_username,
         anglerId: entry.user_id,
-        species: formatSpeciesLabel(entry.species, customSpecies),
-        weight: formatWeight(entry.weight, entry.weight_unit),
+        species: formatSpeciesLabel(entry.species, customSpecies ?? undefined),
+        weight:
+          formatWeightLabel(entry.weight, entry.weight_unit, {
+            fallback: "—",
+            maximumFractionDigits: Number.isInteger(entry.weight ?? 0) ? 0 : 1,
+          }) || "—",
         length: formatLength(entry.length, entry.length_unit),
         location: customLocationLabel ?? entry.location ?? "—",
         method: customMethod ?? entry.method ?? "—",
@@ -151,11 +151,15 @@ const LeaderboardPage = () => {
                       <div className="catch-cell">
                         <div className="catch-thumb">
                           <img
-                            src={row.thumbnail}
-                            alt=""
+                            src={row.thumbnail.src}
+                            alt={row.catchTitle}
                             width={48}
                             height={48}
                             loading="lazy"
+                            decoding="async"
+                            {...(row.thumbnail.srcSet
+                              ? { srcSet: row.thumbnail.srcSet, sizes: row.thumbnail.sizes }
+                              : {})}
                           />
                         </div>
                         <span>{row.catchTitle}</span>

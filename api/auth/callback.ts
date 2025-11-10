@@ -12,6 +12,7 @@ const ACCESS_TOKEN_COOKIE = "sb-access-token";
 const REFRESH_TOKEN_COOKIE = "sb-refresh-token";
 const SESSION_COOKIE = "sb-auth-session";
 const EXPIRES_AT_COOKIE = "sb-token-expires-at";
+const CSRF_COOKIE = "sb-csrf-token";
 
 const THIRTY_DAYS_IN_SECONDS = 60 * 60 * 24 * 30;
 
@@ -35,6 +36,11 @@ const redirectResponse = (location: string) =>
       Location: location,
     },
   });
+
+const generateCsrfToken = () => {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+};
 
 export default async function handler(req: Request): Promise<Response> {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -97,6 +103,7 @@ export default async function handler(req: Request): Promise<Response> {
     );
     headers.append("Set-Cookie", serializeCookie(SESSION_COOKIE, safeSession, expires_in));
     headers.append("Set-Cookie", serializeCookie(EXPIRES_AT_COOKIE, expiresAtValue, expires_in));
+    headers.append("Set-Cookie", serializeCookie(CSRF_COOKIE, generateCsrfToken(), THIRTY_DAYS_IN_SECONDS));
     headers.set("Location", targetLocation);
 
     return new Response(null, {

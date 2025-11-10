@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Search as SearchIcon } from "lucide-react";
 import { formatSpeciesName, searchAll, type SearchCatch, type SearchProfile } from "@/lib/search";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { resolveAvatarUrl } from "@/lib/storage";
 import { getProfilePath } from "@/lib/profile";
+import { useFollowingIds } from "@/hooks/useFollowingIds";
 
 export const GlobalSearch = () => {
   const navigate = useNavigate();
@@ -26,7 +26,7 @@ export const GlobalSearch = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
   const userId = user?.id ?? null;
-  const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const { data: followingIds = [] } = useFollowingIds(userId);
   const trimmedQuery = useMemo(() => debouncedQuery.trim(), [debouncedQuery]);
 
   const resetResults = () => {
@@ -37,34 +37,9 @@ export const GlobalSearch = () => {
   };
 
   useEffect(() => {
-    let active = true;
-
-    const loadFollowing = async () => {
-      if (!userId) {
-        setFollowingIds([]);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("profile_follows")
-        .select("following_id")
-        .eq("follower_id", userId);
-
-      if (!active) return;
-      if (error) {
-        console.error("Failed to load following list", error);
-        setFollowingIds([]);
-        return;
-      }
-
-      setFollowingIds((data ?? []).map((row) => row.following_id));
-    };
-
-    void loadFollowing();
-
-    return () => {
-      active = false;
-    };
+    if (!userId) {
+      setOpen(false);
+    }
   }, [userId]);
 
   useEffect(() => {

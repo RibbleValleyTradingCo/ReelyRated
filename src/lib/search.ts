@@ -1,9 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 import { UK_FRESHWATER_SPECIES } from "@/lib/freshwater-data";
-import { canViewCatch, shouldShowExactLocation } from "@/lib/visibility";
+import { canViewCatch, shouldShowExactLocation, sanitizeCatchConditions } from "@/lib/visibility";
 import type { Database } from "@/integrations/supabase/types";
 import { searchCatches } from "@/lib/data/catches";
-import { sanitizeSearchInput, escapeLikePattern } from "@/lib/security/query-sanitizer";
+import { buildIlikeFilters, normalizeSearchTerm } from "@/lib/search/search-utils";
+export { formatSpeciesName } from "@/lib/formatters/species";
 
 export interface SearchProfile {
   id: string;
@@ -50,28 +51,16 @@ const DEFAULT_LIMITS = {
   venueLimit: 10,
 } as const;
 
-export const formatSpeciesName = (species: string | null, customSpecies?: string | null) => {
-  if (species === "other" && customSpecies) return customSpecies;
-  if (!species) return null;
-
-  return species
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-};
-
 export const searchAll = async (
   query: string,
   options: SearchOptions = {}
 ): Promise<SearchResults> => {
-  const trimmed = query.trim();
-  const sanitized = sanitizeSearchInput(trimmed);
-  if (!sanitized) {
+  const normalized = normalizeSearchTerm(query);
+  if (!normalized) {
     return { profiles: [], catches: [], venues: [], errors: [] };
   }
 
-  const likePattern = `%${escapeLikePattern(sanitized)}%`;
-  const lowerTrimmed = sanitized.toLowerCase();
+  const { likePattern, lowerCase, sanitized } = normalized;
 
   const {
     profileLimit,
@@ -96,16 +85,17 @@ export const searchAll = async (
     return "We couldn't fetch every result this time.";
   };
 
+  const profileFilters = buildIlikeFilters(likePattern, ["username", "bio"]);
   const profilePromise = supabase
     .from("profiles")
     .select("id, username, avatar_path, avatar_url, bio")
-    .or(`username.ilike.${likePattern},bio.ilike.${likePattern}`)
+    .or(profileFilters.join(","))
     .limit(profileLimit);
 
   const speciesCandidates = UK_FRESHWATER_SPECIES.filter((species) => {
     const label = species.label.toLowerCase();
     const value = species.value.toLowerCase();
-    return label.includes(lowerTrimmed) || value.includes(lowerTrimmed);
+    return label.includes(lowerCase) || value.includes(lowerCase);
   }).map((species) => species.value);
 
   const catchPromise = searchCatches(sanitized, catchLimit, speciesCandidates);
@@ -133,7 +123,8 @@ export const searchAll = async (
   type RawCatchRow = SearchCatch;
   const rawCatchRows: RawCatchRow[] =
     !catchRes.error && catchRes.data ? (catchRes.data as RawCatchRow[]) : [];
-  const catches: SearchCatch[] = rawCatchRows
+  const sanitizedCatchRows = rawCatchRows.map((row) => sanitizeCatchConditions(row, resolvedViewerId));
+  const catches: SearchCatch[] = sanitizedCatchRows
     .filter((row) =>
       canViewCatch(row.visibility, row.user_id, resolvedViewerId, resolvedFollowingIds)
     )

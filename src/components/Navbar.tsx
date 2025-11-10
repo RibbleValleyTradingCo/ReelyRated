@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { callServerLogout } from "@/lib/auth/helpers";
 
 export const Navbar = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -140,6 +140,24 @@ export const Navbar = () => {
       </Link>
     </div>
   );
+
+  if (loading) {
+    return (
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur">
+        <div className="mx-auto w-full max-w-6xl px-4 md:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between md:h-[72px]">
+            <div className="h-10 w-32 animate-pulse rounded-full bg-slate-200" />
+            <div className="hidden gap-4 lg:flex">
+              <div className="h-6 w-16 animate-pulse rounded bg-slate-200" />
+              <div className="h-6 w-16 animate-pulse rounded bg-slate-200" />
+              <div className="h-6 w-16 animate-pulse rounded bg-slate-200" />
+            </div>
+            <div className="h-10 w-24 animate-pulse rounded-full bg-slate-200" />
+          </div>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur">

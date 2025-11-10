@@ -9,12 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Star, Trophy, Fish, BarChart3, Loader2, Settings, Sparkles } from "lucide-react";
-import { getFreshwaterSpeciesLabel } from "@/lib/freshwater-data";
 import { createNotification } from "@/lib/notifications";
 import { getProfilePath, isUuid } from "@/lib/profile";
 import { resolveAvatarUrl } from "@/lib/storage";
 import { ProfileNotificationsSection } from "@/components/ProfileNotificationsSection";
 import ProfileNotFound from "@/components/ProfileNotFound";
+import { formatSpeciesLabel } from "@/lib/formatters/species";
+import { formatWeightLabel } from "@/lib/formatters/weights";
 
 interface Profile {
   id: string;
@@ -110,56 +111,6 @@ const Profile = () => {
     }
   }, [navigate, slug]);
 
-  const fetchUserCatches = useCallback(async () => {
-    if (!profileId) return;
-    const { data, error } = await supabase
-      .from("catches")
-      .select("id, title, image_url, weight, weight_unit, species, created_at, ratings (rating)")
-      .eq("user_id", profileId)
-      .order("created_at", { ascending: false });
-
-    if (!error && data) {
-      setCatches(data);
-    }
-  }, [profileId]);
-
-  const fetchFollowers = useCallback(async () => {
-    if (!profileId) return;
-    const { count, error } = await supabase
-      .from("profile_follows")
-      .select("id", { count: "exact", head: true })
-      .eq("following_id", profileId);
-
-    if (!error && count !== null) {
-      setFollowersCount(count);
-    }
-  }, [profileId]);
-
-  const fetchFollowingProfiles = useCallback(async () => {
-    if (!profileId) return;
-    const { data, error } = await supabase
-      .from("profile_follows")
-      .select(
-        `
-          followed_profile:profiles!profile_follows_following_id_fkey (
-            id,
-            username,
-            avatar_path,
-            avatar_url,
-            bio
-          )
-        `
-      )
-      .eq("follower_id", profileId);
-
-    if (!error && data) {
-      const parsed = (data as { followed_profile: FollowingProfile | null }[])
-        .map((row) => row.followed_profile)
-        .filter((profileRow): profileRow is FollowingProfile => !!profileRow);
-      setFollowingProfiles(parsed);
-    }
-  }, [profileId]);
-
   const fetchFollowStatus = useCallback(async () => {
     if (!profileId || !user || user.id === profileId) return;
     const { data, error } = await supabase
@@ -179,11 +130,75 @@ const Profile = () => {
   }, [fetchProfile]);
 
   useEffect(() => {
-    if (!profileId) return;
-    void fetchUserCatches();
-    void fetchFollowers();
-    void fetchFollowingProfiles();
-  }, [profileId, fetchFollowers, fetchFollowingProfiles, fetchUserCatches]);
+    if (!profileId) {
+      setCatches([]);
+      setFollowersCount(0);
+      setFollowingProfiles([]);
+      return;
+    }
+
+    let active = true;
+
+    const loadProfileDetails = async () => {
+      const [catchesResponse, followersResponse, followingResponse] = await Promise.all([
+        supabase
+          .from("catches")
+          .select("id, title, image_url, weight, weight_unit, species, created_at, ratings (rating)")
+          .eq("user_id", profileId)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("profile_follows")
+          .select("id", { count: "exact", head: true })
+          .eq("following_id", profileId),
+        supabase
+          .from("profile_follows")
+          .select(
+            `
+              followed_profile:profiles!profile_follows_following_id_fkey (
+                id,
+                username,
+                avatar_path,
+                avatar_url,
+                bio
+              )
+            `,
+          )
+          .eq("follower_id", profileId),
+      ]);
+
+      if (!active) return;
+
+      if (!catchesResponse.error && catchesResponse.data) {
+        setCatches(catchesResponse.data as Catch[]);
+      } else if (catchesResponse.error) {
+        console.error("Failed to load catches", catchesResponse.error);
+        setCatches([]);
+      }
+
+      if (!followersResponse.error && followersResponse.count !== null) {
+        setFollowersCount(followersResponse.count);
+      } else if (followersResponse.error) {
+        console.error("Failed to load follower count", followersResponse.error);
+        setFollowersCount(0);
+      }
+
+      if (!followingResponse.error && followingResponse.data) {
+        const parsed = (followingResponse.data as { followed_profile: FollowingProfile | null }[])
+          .map((row) => row.followed_profile)
+          .filter((profileRow): profileRow is FollowingProfile => Boolean(profileRow));
+        setFollowingProfiles(parsed);
+      } else if (followingResponse.error) {
+        console.error("Failed to load following profiles", followingResponse.error);
+        setFollowingProfiles([]);
+      }
+    };
+
+    void loadProfileDetails();
+
+    return () => {
+      active = false;
+    };
+  }, [profileId]);
 
   useEffect(() => {
     if (!profileId || !user || user.id === profileId) {
@@ -294,15 +309,14 @@ const Profile = () => {
     };
   }, [catches, followingProfiles]);
 
-  const formatWeight = (weight: number | null, unit: string | null) => {
-    if (weight === null || weight === undefined) return "-";
-    return `${weight}${unit === "kg" ? "kg" : "lb"}`;
-  };
+  const formatWeight = (weight: number | null, unit: string | null) =>
+    formatWeightLabel(weight, unit, {
+      fallback: "-",
+      maximumFractionDigits: Number.isInteger(weight ?? 0) ? 0 : 1,
+    }) || "-";
 
-  const formatSpecies = (species: string | null) => {
-    if (!species) return "-";
-    return getFreshwaterSpeciesLabel(species) ?? species.replace(/_/g, " ");
-  };
+  const formatSpecies = (species: string | null) =>
+    formatSpeciesLabel(species, undefined, "-");
 
   const statIconClasses =
     "flex h-10 w-10 items-center justify-center rounded-full bg-sky-500/10 text-sky-500";

@@ -41,16 +41,17 @@ import {
   Download,
 } from "lucide-react";
 import { format } from "date-fns";
-import { getFreshwaterSpeciesLabel } from "@/lib/freshwater-data";
 import { CatchComments } from "@/components/CatchComments";
 import { createNotification } from "@/lib/notifications";
 import { getProfilePath } from "@/lib/profile";
 import { resolveAvatarUrl } from "@/lib/storage";
-import { canViewCatch, shouldShowExactLocation } from "@/lib/visibility";
+import { canViewCatch, shouldShowExactLocation, sanitizeCatchConditions } from "@/lib/visibility";
 import type { Database } from "@/integrations/supabase/types";
 import html2canvas from "html2canvas";
 import ShareCard from "@/components/ShareCard";
 import ReportButton from "@/components/ReportButton";
+import { extractCustomSpecies, formatSpeciesLabel } from "@/lib/formatters/species";
+import { formatWeightLabel } from "@/lib/formatters/weights";
 
 type CustomFields = {
   species?: string;
@@ -157,11 +158,13 @@ const CatchDetail = () => {
     if (!id) return;
     setIsLoading(true);
     try {
-      const { data, error } = await fetchCatchForViewer(id, user?.id ?? null);
+      const viewerId = user?.id ?? null;
+      const { data, error } = await fetchCatchForViewer(id, viewerId);
       if (error || !data) {
         throw error ?? new Error("Catch not found");
       }
-      setCatchData(data as CatchData);
+      const sanitizedCatch = sanitizeCatchConditions(data as CatchData, viewerId);
+      setCatchData(sanitizedCatch as CatchData);
     } catch (error) {
       console.error("Error fetching catch:", error);
       toast.error("Failed to load catch details");
@@ -447,12 +450,13 @@ const CatchDetail = () => {
       window.open(`https://wa.me/?text=${encodeURIComponent(catchUrl)}`, "_blank");
       return;
     }
-    const customFields = catchData.conditions?.customFields ?? {};
-    const customSpecies = customFields.species;
-    const speciesLabel = formatSpecies(catchData.species, customSpecies) ?? "a catch";
-    const weightLabel = catchData.weight
-      ? formatWeight(catchData.weight, catchData.weight_unit)
-      : null;
+    const customSpecies = extractCustomSpecies(catchData.conditions);
+    const speciesLabel = formatSpeciesLabel(catchData.species, customSpecies, "a catch");
+    const weightLabel =
+      formatWeightLabel(catchData.weight, catchData.weight_unit, {
+        fallback: "",
+        maximumFractionDigits: Number.isInteger(catchData.weight ?? 0) ? 0 : 1,
+      }) || null;
     const messageParts = [
       `Check out ${catchData.title}`,
       weightLabel ? `(${weightLabel})` : null,
@@ -529,18 +533,6 @@ const CatchDetail = () => {
     return `${(sum / ratings.length).toFixed(1)} / 10`;
   };
 
-  const formatWeight = (weight: number | null, unit: string | null) => {
-    if (!weight) return null;
-    return `${weight}${unit === "kg" ? "kg" : "lb"}`;
-  };
-
-  const formatSpecies = (species: string | null, custom?: string) => {
-    if (species === "other" && custom) {
-      return custom;
-    }
-    return getFreshwaterSpeciesLabel(species);
-  };
-
   const formatEnum = (value: string | null) => {
     if (!value) return "";
     return value.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -556,7 +548,7 @@ const CatchDetail = () => {
   }
 
   const customFields = catchData.conditions?.customFields ?? {};
-  const customSpecies = customFields.species;
+  const customSpecies = extractCustomSpecies(catchData.conditions);
   const customMethod = customFields.method;
   const gpsData = catchData.conditions?.gps;
   const hasGpsData = Boolean(gpsData?.lat && gpsData?.lng);
@@ -565,8 +557,12 @@ const CatchDetail = () => {
     username: "Unknown angler",
     avatar_url: null,
   };
-  const shareSpecies = formatSpecies(catchData.species, customSpecies);
-  const shareWeight = formatWeight(catchData.weight, catchData.weight_unit);
+  const shareSpecies = formatSpeciesLabel(catchData.species, customSpecies, "Unknown species");
+  const shareWeight =
+    formatWeightLabel(catchData.weight, catchData.weight_unit, {
+      fallback: "",
+      maximumFractionDigits: Number.isInteger(catchData.weight ?? 0) ? 0 : 1,
+    }) || null;
   const shareDate = catchData.caught_at ?? catchData.created_at;
   const formatSlugLabel = (value: string | null | undefined) => {
     if (!value) return "";
@@ -614,6 +610,8 @@ const CatchDetail = () => {
           <img
             src={catchData.image_url}
             alt={catchData.title}
+            loading="lazy"
+            decoding="async"
             className="w-full h-[500px] object-cover rounded-xl"
           />
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-8 rounded-b-xl">
@@ -624,7 +622,9 @@ const CatchDetail = () => {
                     <span className="text-4xl font-bold text-white">
                       {catchData.weight}{catchData.weight_unit === 'kg' ? 'kg' : 'lb'}
                     </span>
-                    <span className="text-2xl text-white/90">{formatSpecies(catchData.species, customSpecies)}</span>
+                    <span className="text-2xl text-white/90">
+                      {formatSpeciesLabel(catchData.species, customSpecies, "Unknown species")}
+                    </span>
                   </div>
                 )}
                 <h1 className="text-3xl font-bold text-white mb-2">{catchData.title}</h1>
@@ -759,6 +759,8 @@ const CatchDetail = () => {
                         key={index}
                         src={photo}
                         alt={`Gallery ${index + 1}`}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-40 object-cover rounded-lg cursor-pointer hover:opacity-80 transition"
                       />
                     ))}

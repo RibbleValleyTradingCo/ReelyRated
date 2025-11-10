@@ -13,6 +13,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 }
 
 const AUTH_STORAGE_KEY = "sb-auth-session";
+const PKCE_STORAGE_KEY = `${AUTH_STORAGE_KEY}-code-verifier`;
 const ACCESS_TOKEN_COOKIE = "sb-access-token";
 const REFRESH_TOKEN_COOKIE = "sb-refresh-token";
 const EXPIRES_AT_COOKIE = "sb-token-expires-at";
@@ -25,7 +26,7 @@ const cleanLegacyStorage = () => {
   try {
     const keys = Object.keys(localStorage);
     keys.forEach((key) => {
-      if (key.includes("supabase") || key.includes("auth")) {
+      if ((key.includes("supabase") || key.includes("auth")) && !key.startsWith("sb-")) {
         localStorage.removeItem(key);
       }
     });
@@ -35,6 +36,30 @@ const cleanLegacyStorage = () => {
 };
 
 cleanLegacyStorage();
+
+const isSessionStorageAvailable = () => {
+  try {
+    if (typeof window === "undefined" || !window.sessionStorage) return false;
+    const testKey = "__sb_test__";
+    window.sessionStorage.setItem(testKey, "1");
+    window.sessionStorage.removeItem(testKey);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const isLocalStorageAvailable = () => {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return false;
+    const testKey = "__sb_local_test__";
+    window.localStorage.setItem(testKey, "1");
+    window.localStorage.removeItem(testKey);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const getCookieValue = (name: string) => {
   if (!isBrowser || !document.cookie) return null;
@@ -54,7 +79,7 @@ const isSecureContext = () => {
 };
 
 const baseCookieOptions = () => {
-  const options = ["Path=/", "SameSite=Strict"];
+  const options = ["Path=/", "SameSite=Lax"];
   if (isSecureContext()) {
     options.push("Secure");
   }
@@ -110,9 +135,27 @@ const syncTokenCookies = (session: Session | null) => {
 };
 
 export const cookieStorage = {
-  getItem: (key: string) => getCookieValue(key),
+  getItem: (key: string) => {
+    if (key === PKCE_STORAGE_KEY && isSessionStorageAvailable()) {
+      return window.sessionStorage.getItem(key);
+    }
+    if (key === AUTH_STORAGE_KEY && isLocalStorageAvailable()) {
+      return window.localStorage.getItem(key);
+    }
+    return getCookieValue(key);
+  },
   setItem: (key: string, value: string) => {
     if (!value) return;
+    if (key === PKCE_STORAGE_KEY && isSessionStorageAvailable()) {
+      window.sessionStorage.setItem(key, value);
+      return;
+    }
+    if (key === AUTH_STORAGE_KEY && isLocalStorageAvailable()) {
+      window.localStorage.setItem(key, value);
+      const session = parseSession(value);
+      syncTokenCookies(session);
+      return;
+    }
     if (key === AUTH_STORAGE_KEY) {
       const session = parseSession(value);
       const maxAge = deriveSessionMaxAge(session);
@@ -123,6 +166,15 @@ export const cookieStorage = {
     }
   },
   removeItem: (key: string) => {
+    if (key === PKCE_STORAGE_KEY && isSessionStorageAvailable()) {
+      window.sessionStorage.removeItem(key);
+      return;
+    }
+    if (key === AUTH_STORAGE_KEY && isLocalStorageAvailable()) {
+      window.localStorage.removeItem(key);
+      syncTokenCookies(null);
+      return;
+    }
     removeBrowserCookie(key);
     if (key === AUTH_STORAGE_KEY) {
       syncTokenCookies(null);

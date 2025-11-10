@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, Search as SearchIcon } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import {
   formatSpeciesName,
   searchAll,
@@ -16,6 +15,7 @@ import {
 } from "@/lib/search";
 import { getProfilePath } from "@/lib/profile";
 import { resolveAvatarUrl } from "@/lib/storage";
+import { useFollowingIds } from "@/hooks/useFollowingIds";
 
 const Section = ({
   title,
@@ -45,36 +45,7 @@ const SearchPage = () => {
   const [errors, setErrors] = useState<string[]>([]);
   const { user } = useAuth();
   const userId = user?.id ?? null;
-  const [followingIds, setFollowingIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    let active = true;
-
-    if (!userId) {
-      setFollowingIds([]);
-      return () => {
-        active = false;
-      };
-    }
-
-    supabase
-      .from("profile_follows")
-      .select("following_id")
-      .eq("follower_id", userId)
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error) {
-          console.error("Failed to load following list", error);
-          setFollowingIds([]);
-          return;
-        }
-        setFollowingIds((data ?? []).map((row) => row.following_id));
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [userId]);
+  const { data: followingIds = [] } = useFollowingIds(userId);
 
   useEffect(() => {
     setQuery(queryParam);

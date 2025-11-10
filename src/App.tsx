@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/components/AuthProvider";
 import { PageLoadingFallback } from "@/components/LoadingSpinner";
 import { useAuthCallback } from "@/hooks/useAuthCallback";
+import { useAuth } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 
@@ -26,40 +27,49 @@ const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 
 const queryClient = new QueryClient();
 
-const App = () => {
+const AppRoutes = () => {
   useAuthCallback();
+  const { loading } = useAuth();
+
+  if (loading) {
+    return <PageLoadingFallback />;
+  }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <Suspense fallback={<PageLoadingFallback />}>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/feed" element={<Feed />} />
-                <Route path="/leaderboard" element={<LeaderboardPage />} />
-                <Route path="/add-catch" element={<AddCatch />} />
-                <Route path="/catch/:id" element={<CatchDetail />} />
-                <Route path="/profile/:slug" element={<Profile />} />
-                <Route path="/settings/profile" element={<ProfileSettings />} />
-                <Route path="/sessions" element={<Sessions />} />
-                <Route path="/admin/reports" element={<AdminReports />} />
-                <Route path="/admin/audit-log" element={<AdminAuditLog />} />
-                <Route path="/search" element={<SearchPage />} />
-                <Route path="/insights" element={<Insights />} />
-                <Route path="/venues/:slug" element={<VenueDetail />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <Routes>
+      <Route path="/" element={<Index />} />
+      <Route path="/auth" element={<Auth />} />
+      <Route path="/feed" element={<Feed />} />
+      <Route path="/leaderboard" element={<LeaderboardPage />} />
+      <Route path="/add-catch" element={<AddCatch />} />
+      <Route path="/catch/:id" element={<CatchDetail />} />
+      <Route path="/profile/:slug" element={<Profile />} />
+      <Route path="/settings/profile" element={<ProfileSettings />} />
+      <Route path="/sessions" element={<Sessions />} />
+      <Route path="/admin/reports" element={<AdminReports />} />
+      <Route path="/admin/audit-log" element={<AdminAuditLog />} />
+      <Route path="/search" element={<SearchPage />} />
+      <Route path="/insights" element={<Insights />} />
+      <Route path="/venues/:slug" element={<VenueDetail />} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   );
 };
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <AuthProvider>
+          <Suspense fallback={<PageLoadingFallback />}>
+            <AppRoutes />
+          </Suspense>
+        </AuthProvider>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
 export default App;

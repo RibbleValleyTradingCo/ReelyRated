@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,13 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Star, MessageCircle, Fish, Heart } from "lucide-react";
 import { toast } from "sonner";
-import { UK_FRESHWATER_SPECIES, getFreshwaterSpeciesLabel } from "@/lib/freshwater-data";
-import { canViewCatch, shouldShowExactLocation } from "@/lib/visibility";
+import { UK_FRESHWATER_SPECIES } from "@/lib/freshwater-data";
+import { canViewCatch, shouldShowExactLocation, sanitizeCatchConditions } from "@/lib/visibility";
 import type { Database } from "@/integrations/supabase/types";
 import { resolveAvatarUrl } from "@/lib/storage";
 import { fetchFeedCatches } from "@/lib/data/catches";
 import { usePagination } from "@/hooks/usePagination";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { extractCustomSpecies, formatSpeciesLabel } from "@/lib/formatters/species";
+import { formatWeightLabel } from "@/lib/formatters/weights";
+import { useFollowingIds } from "@/hooks/useFollowingIds";
 
 const capitalizeFirstWord = (value: string) => {
   if (!value) return "";
@@ -77,7 +79,7 @@ const Feed = () => {
   const [sortBy, setSortBy] = useState<string>("newest");
   const [customSpeciesFilter, setCustomSpeciesFilter] = useState("");
   const [feedScope, setFeedScope] = useState<"all" | "following">("all");
-  const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const { data: followingIds = [] } = useFollowingIds(user?.id);
   const sessionFilter = searchParams.get("session");
   const {
     page,
@@ -96,6 +98,12 @@ const Feed = () => {
       navigate("/auth");
     }
   }, [user, loading, navigate]);
+
+  useEffect(() => {
+    if (!user && feedScope !== "all") {
+      setFeedScope("all");
+    }
+  }, [user, feedScope]);
 
   const filterKey = useMemo(
     () =>
@@ -118,7 +126,9 @@ const Feed = () => {
       if (error) {
         throw error;
       }
-      const nextData = (data as Catch[]) ?? [];
+      const nextData = ((data as Catch[]) ?? []).map((catchItem) =>
+        sanitizeCatchConditions(catchItem, user?.id ?? null),
+      );
       setCatches((prev) => (page === 0 ? nextData : [...prev, ...nextData]));
       setHasMore(nextData.length === pageSize);
     } catch (error) {
@@ -136,31 +146,6 @@ const Feed = () => {
     if (!user) return;
     void fetchCatches();
   }, [fetchCatches, user]);
-
-  useEffect(() => {
-    if (!user) {
-      setFollowingIds([]);
-      setFeedScope("all");
-      return;
-    }
-
-    const loadFollowing = async () => {
-      const { data, error } = await supabase
-        .from("profile_follows")
-        .select("following_id")
-        .eq("follower_id", user.id);
-
-      if (error) {
-        console.error("Failed to load followed anglers", error);
-        setFollowingIds([]);
-        return;
-      }
-
-      setFollowingIds((data ?? []).map((row) => row.following_id));
-    };
-
-    void loadFollowing();
-  }, [user]);
 
   const filterAndSortCatches = useCallback(() => {
     let filtered = [...catches];
@@ -190,7 +175,7 @@ const Feed = () => {
           if (!customSpeciesFilter) {
             return true;
           }
-          const customValue = (catchItem.conditions?.customFields?.species ?? "").toLowerCase();
+          const customValue = (extractCustomSpecies(catchItem.conditions) ?? "").toLowerCase();
           return customValue.startsWith(customSpeciesFilter.toLowerCase());
         }
         return catchItem.species === speciesFilter;
@@ -253,21 +238,13 @@ const Feed = () => {
     return (sum / ratings.length).toFixed(1);
   };
 
-  const formatSpecies = (catchItem: Catch) => {
-    if (!catchItem.species) return "";
-    if (catchItem.species === "other") {
-      const customSpecies = catchItem.conditions?.customFields?.species;
-      if (customSpecies) {
-        return customSpecies;
-      }
-      return "Other";
-    }
-    return getFreshwaterSpeciesLabel(catchItem.species) || "Unknown";
-  };
+  const getSpeciesLabel = (catchItem: Catch) =>
+    formatSpeciesLabel(catchItem.species, extractCustomSpecies(catchItem.conditions), "");
 
   const formatWeight = (weight: number | null, unit: string | null) => {
     if (!weight) return "";
-    return `${weight}${unit === 'kg' ? 'kg' : 'lb'}`;
+    const decimals = Number.isInteger(weight) ? 0 : 1;
+    return formatWeightLabel(weight, unit, { fallback: "", maximumFractionDigits: decimals });
   };
 
   if (loading || initialLoading) {
@@ -350,6 +327,8 @@ const Feed = () => {
                 <img
                   src={catchItem.image_url}
                   alt={catchItem.title}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-64 object-cover rounded-t-lg"
                 />
                 {catchItem.species && catchItem.weight && (
@@ -357,7 +336,7 @@ const Feed = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Fish className="w-5 h-5" />
-                        <span className="font-bold text-lg">{formatSpecies(catchItem)}</span>
+                        <span className="font-bold text-lg">{getSpeciesLabel(catchItem)}</span>
                       </div>
                       <span className="font-bold text-xl">{formatWeight(catchItem.weight, catchItem.weight_unit)}</span>
                     </div>
