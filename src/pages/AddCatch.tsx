@@ -651,17 +651,17 @@ const AddCatch = () => {
                 speciesPopoverOpen={speciesPopoverOpen}
                 speciesSearch={speciesSearch}
                 onImageChange={handleImageChange}
-                onTitleChange={(title) => setFormData({ ...formData, title })}
+                onTitleChange={(title) => setFormData((prev) => ({ ...prev, title }))}
                 onSpeciesChange={(species, customSpecies) =>
-                  setFormData({ ...formData, species, customSpecies })
+                  setFormData((prev) => ({ ...prev, species, customSpecies }))
                 }
-                onWeightChange={(weight) => setFormData({ ...formData, weight })}
+                onWeightChange={(weight) => setFormData((prev) => ({ ...prev, weight }))}
                 onWeightUnitChange={(weightUnit) =>
-                  setFormData({ ...formData, weightUnit })
+                  setFormData((prev) => ({ ...prev, weightUnit }))
                 }
-                onLengthChange={(length) => setFormData({ ...formData, length })}
+                onLengthChange={(length) => setFormData((prev) => ({ ...prev, length }))}
                 onLengthUnitChange={(lengthUnit) =>
-                  setFormData({ ...formData, lengthUnit })
+                  setFormData((prev) => ({ ...prev, lengthUnit }))
                 }
                 onSpeciesPopoverOpenChange={setSpeciesPopoverOpen}
                 onSpeciesSearchChange={setSpeciesSearch}
@@ -695,22 +695,22 @@ const AddCatch = () => {
                 CREATE_SESSION_OPTION={CREATE_SESSION_OPTION}
                 NO_SESSION_OPTION={NO_SESSION_OPTION}
                 onLocationChange={(location) =>
-                  setFormData({ ...formData, location })
+                  setFormData((prev) => ({ ...prev, location }))
                 }
                 onCustomLocationLabelChange={(customLocationLabel) =>
-                  setFormData({ ...formData, customLocationLabel })
+                  setFormData((prev) => ({ ...prev, customLocationLabel }))
                 }
                 onPegOrSwimChange={(pegOrSwim) =>
-                  setFormData({ ...formData, pegOrSwim })
+                  setFormData((prev) => ({ ...prev, pegOrSwim }))
                 }
                 onCaughtAtChange={(caughtAt) =>
-                  setFormData({ ...formData, caughtAt })
+                  setFormData((prev) => ({ ...prev, caughtAt }))
                 }
                 onTimeOfDayChange={(timeOfDay) =>
-                  setFormData({ ...formData, timeOfDay })
+                  setFormData((prev) => ({ ...prev, timeOfDay }))
                 }
                 onWaterTypeChange={(waterType) =>
-                  setFormData({ ...formData, waterType })
+                  setFormData((prev) => ({ ...prev, waterType }))
                 }
                 onOpenChange={setOpen}
                 onUseGpsLocationChange={(
@@ -723,7 +723,7 @@ const AddCatch = () => {
                   setUseGpsLocation(useGps);
                   setGpsCoordinates(coords);
                   setGpsAccuracy(accuracy);
-                  setFormData({ ...formData, customLocationLabel: label });
+                  setFormData((prev) => ({ ...prev, customLocationLabel: label }));
                   setLocationError(error);
                 }}
                 onHandleUseGps={handleUseGps}
@@ -751,16 +751,16 @@ const AddCatch = () => {
                 trimmedBaitSearch={trimmedBaitSearch}
                 trimmedMethodSearch={trimmedMethodSearch}
                 onBaitUsedChange={(baitUsed) =>
-                  setFormData({ ...formData, baitUsed })
+                  setFormData((prev) => ({ ...prev, baitUsed }))
                 }
                 onMethodChange={(method, customMethod) =>
-                  setFormData({ ...formData, method, customMethod })
+                  setFormData((prev) => ({ ...prev, method, customMethod }))
                 }
                 onCustomMethodChange={(customMethod) =>
-                  setFormData({ ...formData, customMethod })
+                  setFormData((prev) => ({ ...prev, customMethod }))
                 }
                 onEquipmentUsedChange={(equipmentUsed) =>
-                  setFormData({ ...formData, equipmentUsed })
+                  setFormData((prev) => ({ ...prev, equipmentUsed }))
                 }
                 onBaitPopoverOpenChange={setBaitPopoverOpen}
                 onMethodPopoverOpenChange={setMethodPopoverOpen}
@@ -772,7 +772,7 @@ const AddCatch = () => {
               <StorySection
                 description={formData.description}
                 onDescriptionChange={(description) =>
-                  setFormData({ ...formData, description })
+                  setFormData((prev) => ({ ...prev, description }))
                 }
               />
 
@@ -784,13 +784,13 @@ const AddCatch = () => {
                 waterClarity={formData.waterClarity}
                 windDirection={formData.windDirection}
                 onShowConditionsChange={setShowConditions}
-                onWeatherChange={(weather) => setFormData({ ...formData, weather })}
-                onAirTempChange={(airTemp) => setFormData({ ...formData, airTemp })}
+                onWeatherChange={(weather) => setFormData((prev) => ({ ...prev, weather }))}
+                onAirTempChange={(airTemp) => setFormData((prev) => ({ ...prev, airTemp }))}
                 onWaterClarityChange={(waterClarity) =>
-                  setFormData({ ...formData, waterClarity })
+                  setFormData((prev) => ({ ...prev, waterClarity }))
                 }
                 onWindDirectionChange={(windDirection) =>
-                  setFormData({ ...formData, windDirection })
+                  setFormData((prev) => ({ ...prev, windDirection }))
                 }
               />
 
@@ -802,7 +802,7 @@ const AddCatch = () => {
                 onGalleryChange={handleGalleryChange}
                 onRemoveGalleryImage={removeGalleryImage}
                 onVideoUrlChange={(videoUrl) =>
-                  setFormData({ ...formData, videoUrl })
+                  setFormData((prev) => ({ ...prev, videoUrl }))
                 }
               />
 
@@ -812,15 +812,15 @@ const AddCatch = () => {
                 visibility={formData.visibility}
                 hideExactSpot={formData.hideExactSpot}
                 allowRatings={formData.allowRatings}
-                onTagsChange={(tags) => setFormData({ ...formData, tags })}
+                onTagsChange={(tags) => setFormData((prev) => ({ ...prev, tags }))}
                 onVisibilityChange={(visibility) =>
-                  setFormData({ ...formData, visibility })
+                  setFormData((prev) => ({ ...prev, visibility }))
                 }
                 onHideExactSpotChange={(hideExactSpot) =>
-                  setFormData({ ...formData, hideExactSpot })
+                  setFormData((prev) => ({ ...prev, hideExactSpot }))
                 }
                 onAllowRatingsChange={(allowRatings) =>
-                  setFormData({ ...formData, allowRatings })
+                  setFormData((prev) => ({ ...prev, allowRatings }))
                 }
               />
 
