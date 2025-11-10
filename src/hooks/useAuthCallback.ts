@@ -17,8 +17,11 @@ export const useAuthCallback = () => {
 
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) {
+        // Clean up OAuth callback parameters from URL
         const updatedUrl = new URL(window.location.href);
-        if (updatedUrl.searchParams.has("code")) {
+        const hasOAuthParams = updatedUrl.searchParams.has("code");
+
+        if (hasOAuthParams) {
           updatedUrl.searchParams.delete("code");
           updatedUrl.searchParams.delete("state");
           updatedUrl.searchParams.delete("error");
@@ -27,8 +30,10 @@ export const useAuthCallback = () => {
             "",
             updatedUrl.pathname + updatedUrl.search + updatedUrl.hash,
           );
+          // Only navigate to home if we're completing an OAuth flow
+          navigate("/", { replace: true });
         }
-        navigate("/", { replace: true });
+        // Don't navigate if it's just a session refresh (tab focus)
       }
 
       if (event === "SIGNED_OUT") {

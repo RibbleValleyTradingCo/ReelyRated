@@ -969,7 +969,7 @@ const Insights = () => {
                       ) : (
                         <div className="h-72 w-full">
                           <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={monthlyCounts} margin={{ top: 24, right: 24, bottom: 40, left: 8 }}>
+                            <LineChart data={monthlyCounts} margin={{ top: 20, right: 30, bottom: 20, left: 10 }}>
                               <defs>
                                 <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
                                   <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
@@ -997,22 +997,23 @@ const Insights = () => {
                                     return (
                                       <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
                                         <p className="font-medium">{payload[0].payload.label}</p>
-                                        <p>{payload[0].value} catches</p>
+                                        <p className="text-primary">{payload[0].value} catches</p>
                                       </div>
                                     );
                                   }
                                   return null;
                                 }}
+                                cursor={{ stroke: "hsl(var(--muted-foreground))", strokeWidth: 1, strokeDasharray: "3 3" }}
                               />
                               <Line
                                 type="monotone"
                                 dataKey="count"
                                 stroke="hsl(var(--primary))"
-                                strokeWidth={2}
+                                strokeWidth={3}
                                 fill="url(#trendGradient)"
                                 fillOpacity={1}
-                                dot={{ fill: "hsl(var(--primary))", strokeWidth: 2, stroke: "hsl(var(--background))", r: 4 }}
-                                activeDot={{ r: 6 }}
+                                dot={{ fill: "hsl(var(--primary))", strokeWidth: 2, stroke: "hsl(var(--background))", r: 5 }}
+                                activeDot={{ r: 7, strokeWidth: 2 }}
                               />
                             </LineChart>
                           </ResponsiveContainer>
@@ -1038,33 +1039,34 @@ const Insights = () => {
                         <div className="h-72 w-full">
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart
-                              data={[...speciesBarData].reverse()}
-                              layout="horizontal"
-                              margin={{ top: 24, right: 16, bottom: 16, left: 160 }}
+                              data={speciesBarData}
+                              margin={{ top: 20, right: 30, bottom: 20, left: 20 }}
+                              barSize={32}
                             >
                               <defs>
-                                <linearGradient id="speciesGradient" x1="0" y1="0" x2="1" y2="0">
+                                <linearGradient id="speciesGradient" x1="0" y1="0" x2="0" y2="1">
                                   <stop offset="5%" stopColor="hsl(var(--secondary))" stopOpacity={0.9} />
                                   <stop offset="95%" stopColor="hsl(var(--secondary))" stopOpacity={0.25} />
                                 </linearGradient>
                               </defs>
-                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} horizontal={false} />
+                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
                               <XAxis
-                                type="number"
+                                dataKey="label"
+                                stroke="hsl(var(--muted-foreground))"
+                                fontSize={11}
+                                tickLine={false}
+                                axisLine={false}
+                                angle={-45}
+                                textAnchor="end"
+                                height={80}
+                                interval={0}
+                              />
+                              <YAxis
                                 stroke="hsl(var(--muted-foreground))"
                                 fontSize={12}
                                 tickLine={false}
                                 axisLine={false}
                                 allowDecimals={false}
-                              />
-                              <YAxis
-                                type="category"
-                                dataKey="label"
-                                stroke="hsl(var(--muted-foreground))"
-                                fontSize={12}
-                                tickLine={false}
-                                axisLine={false}
-                                width={150}
                               />
                               <Tooltip
                                 content={({ active, payload }) => {
@@ -1072,14 +1074,15 @@ const Insights = () => {
                                     return (
                                       <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
                                         <p className="font-medium">{payload[0].payload.label}</p>
-                                        <p>{payload[0].value} catches</p>
+                                        <p className="text-secondary">{payload[0].value} catches</p>
                                       </div>
                                     );
                                   }
                                   return null;
                                 }}
+                                cursor={{ fill: "hsl(var(--muted))", opacity: 0.1 }}
                               />
-                              <Bar dataKey="catches" fill="url(#speciesGradient)" radius={[0, 6, 6, 0]} />
+                              <Bar dataKey="catches" fill="url(#speciesGradient)" radius={[8, 8, 0, 0]} />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
@@ -1105,7 +1108,7 @@ const Insights = () => {
                       ) : (
                         <div className="h-64 w-full">
                           <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={timeOfDayData} margin={{ top: 24, right: 16, bottom: 40, left: 8 }}>
+                            <BarChart data={timeOfDayData} margin={{ top: 20, right: 30, bottom: 20, left: 10 }} barSize={48}>
                               <defs>
                                 <linearGradient id="timeGradient" x1="0" y1="0" x2="0" y2="1">
                                   <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.85} />
@@ -1133,14 +1136,15 @@ const Insights = () => {
                                     return (
                                       <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
                                         <p className="font-medium">{payload[0].payload.label}</p>
-                                        <p>{payload[0].value} catches</p>
+                                        <p className="text-primary">{payload[0].value} catches</p>
                                       </div>
                                     );
                                   }
                                   return null;
                                 }}
+                                cursor={{ fill: "hsl(var(--muted))", opacity: 0.1 }}
                               />
-                              <Bar dataKey="catches" fill="url(#timeGradient)" radius={[6, 6, 0, 0]} />
+                              <Bar dataKey="catches" fill="url(#timeGradient)" radius={[8, 8, 0, 0]} />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
@@ -1165,33 +1169,34 @@ const Insights = () => {
                         <div className="h-64 w-full">
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart
-                              data={[...baitData].reverse()}
-                              layout="horizontal"
-                              margin={{ top: 24, right: 24, bottom: 16, left: 160 }}
+                              data={baitData}
+                              margin={{ top: 20, right: 30, bottom: 20, left: 20 }}
+                              barSize={32}
                             >
                               <defs>
-                                <linearGradient id="baitGradient" x1="0" y1="0" x2="1" y2="0">
+                                <linearGradient id="baitGradient" x1="0" y1="0" x2="0" y2="1">
                                   <stop offset="5%" stopColor="hsl(var(--secondary))" stopOpacity={0.85} />
                                   <stop offset="95%" stopColor="hsl(var(--secondary))" stopOpacity={0.25} />
                                 </linearGradient>
                               </defs>
-                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} horizontal={false} />
+                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
                               <XAxis
-                                type="number"
+                                dataKey="label"
+                                stroke="hsl(var(--muted-foreground))"
+                                fontSize={11}
+                                tickLine={false}
+                                axisLine={false}
+                                angle={-45}
+                                textAnchor="end"
+                                height={60}
+                                interval={0}
+                              />
+                              <YAxis
                                 stroke="hsl(var(--muted-foreground))"
                                 fontSize={12}
                                 tickLine={false}
                                 axisLine={false}
                                 allowDecimals={false}
-                              />
-                              <YAxis
-                                type="category"
-                                dataKey="label"
-                                stroke="hsl(var(--muted-foreground))"
-                                fontSize={12}
-                                tickLine={false}
-                                axisLine={false}
-                                width={150}
                               />
                               <Tooltip
                                 content={({ active, payload }) => {
@@ -1199,14 +1204,15 @@ const Insights = () => {
                                     return (
                                       <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
                                         <p className="font-medium">{payload[0].payload.label}</p>
-                                        <p>{payload[0].value} catches</p>
+                                        <p className="text-secondary">{payload[0].value} catches</p>
                                       </div>
                                     );
                                   }
                                   return null;
                                 }}
+                                cursor={{ fill: "hsl(var(--muted))", opacity: 0.1 }}
                               />
-                              <Bar dataKey="catches" fill="url(#baitGradient)" radius={[0, 6, 6, 0]} />
+                              <Bar dataKey="catches" fill="url(#baitGradient)" radius={[6, 6, 0, 0]} />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
@@ -1231,7 +1237,7 @@ const Insights = () => {
                     ) : (
                       <div className="h-72 w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={methodData} margin={{ top: 32, right: 24, bottom: 48, left: 8 }}>
+                          <BarChart data={methodData} margin={{ top: 20, right: 30, bottom: 60, left: 10 }} barSize={36}>
                             <defs>
                               <linearGradient id="methodGradient" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.9} />
@@ -1242,12 +1248,13 @@ const Insights = () => {
                             <XAxis
                               dataKey="label"
                               stroke="hsl(var(--muted-foreground))"
-                              fontSize={12}
+                              fontSize={11}
                               tickLine={false}
                               axisLine={false}
-                              angle={-20}
+                              angle={-45}
                               textAnchor="end"
-                              height={60}
+                              height={70}
+                              interval={0}
                             />
                             <YAxis
                               stroke="hsl(var(--muted-foreground))"
@@ -1262,12 +1269,13 @@ const Insights = () => {
                                   return (
                                     <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
                                       <p className="font-medium">{payload[0].payload.label}</p>
-                                      <p>{payload[0].value} catches</p>
+                                      <p className="text-primary">{payload[0].value} catches</p>
                                     </div>
                                   );
                                 }
                                 return null;
                               }}
+                              cursor={{ fill: "hsl(var(--muted))", opacity: 0.1 }}
                             />
                             <Bar dataKey="catches" fill="url(#methodGradient)" radius={[8, 8, 0, 0]} />
                           </BarChart>
