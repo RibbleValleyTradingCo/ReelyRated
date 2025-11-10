@@ -114,9 +114,17 @@ const Feed = () => {
         customSpeciesFilter,
         sessionFilter,
         userId: user?.id ?? null,
-        followingIds: feedScope === "following" ? followingIds : [],
+        ...(feedScope === "following" && { followingIds }),
       }),
-    [feedScope, speciesFilter, customSpeciesFilter, sessionFilter, followingIds, user?.id],
+    [
+      feedScope,
+      speciesFilter,
+      customSpeciesFilter,
+      sessionFilter,
+      user?.id,
+      // Only include followingIds when actually filtering by it
+      ...(feedScope === "following" ? [followingIds] : []),
+    ],
   );
 
   const fetchCatches = useCallback(async () => {
