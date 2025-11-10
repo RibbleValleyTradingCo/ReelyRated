@@ -106,6 +106,15 @@ const Feed = () => {
     }
   }, [user, feedScope]);
 
+  // Create a stable string representation of followingIds to prevent unnecessary re-renders
+  const followingIdsKey = useMemo(() => {
+    if (feedScope !== "following") return "";
+    // Sort and join to create a stable string that only changes when IDs actually change
+    const key = followingIds.slice().sort().join(",");
+    console.log("[Feed] followingIdsKey computed:", { key, feedScope, followingIds });
+    return key;
+  }, [feedScope, followingIds]);
+
   const filterKey = useMemo(
     () =>
       JSON.stringify({
@@ -114,7 +123,7 @@ const Feed = () => {
         customSpeciesFilter,
         sessionFilter,
         userId: user?.id ?? null,
-        ...(feedScope === "following" && { followingIds }),
+        followingIdsKey, // Use stable string instead of array reference
       }),
     [
       feedScope,
@@ -122,26 +131,28 @@ const Feed = () => {
       customSpeciesFilter,
       sessionFilter,
       user?.id,
-      // Only include followingIds when actually filtering by it
-      ...(feedScope === "following" ? [followingIds] : []),
+      followingIdsKey, // Stable string dependency
     ],
   );
 
   const fetchCatches = useCallback(async () => {
     if (!user) return;
+    console.log("[Feed] Fetching catches...", { page, pageSize, feedScope, speciesFilter });
     setIsLoading(true);
     try {
       const { data, error } = await fetchFeedCatches(page, pageSize);
       if (error) {
+        console.error("[Feed] Fetch error:", error);
         throw error;
       }
       const nextData = ((data as Catch[]) ?? []).map((catchItem) =>
         sanitizeCatchConditions(catchItem, user?.id ?? null),
       );
+      console.log("[Feed] Fetched", nextData.length, "catches");
       setCatches((prev) => (page === 0 ? nextData : [...prev, ...nextData]));
       setHasMore(nextData.length === pageSize);
     } catch (error) {
-      console.error("Error fetching catches:", error);
+      console.error("[Feed] Error fetching catches:", error);
       toast.error("Failed to load feed");
       if (page === 0) {
         setCatches([]);
@@ -149,7 +160,7 @@ const Feed = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [page, pageSize, setHasMore, setIsLoading, user]);
+  }, [page, pageSize, setHasMore, setIsLoading, user, feedScope, speciesFilter]);
 
   useEffect(() => {
     if (!user) return;
@@ -217,9 +228,15 @@ const Feed = () => {
   }, [speciesFilter, customSpeciesFilter]);
 
   useEffect(() => {
+    console.log("[Feed] filterKey changed, resetting...", {
+      filterKey,
+      feedScope,
+      speciesFilter,
+      followingIdsKey,
+    });
     setCatches([]);
     reset();
-  }, [filterKey, reset]);
+  }, [filterKey, reset, feedScope, speciesFilter, followingIdsKey]);
 
   useEffect(() => {
     if (!hasMore) return;

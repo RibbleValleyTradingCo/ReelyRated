@@ -54,28 +54,39 @@ export const Navbar = () => {
 
   const handleSignOut = async () => {
     try {
+      console.log("[SignOut] Starting sign out process...");
+
       // Call server logout endpoint (non-critical, can fail)
       try {
+        console.log("[SignOut] Calling server logout endpoint...");
         await callServerLogout();
+        console.log("[SignOut] Server logout successful");
       } catch (error) {
-        console.error("Server logout endpoint failed", error);
+        console.error("[SignOut] Server logout endpoint failed (continuing):", error);
         // Continue with client-side logout even if server call fails
       }
 
       // Perform client-side logout (critical)
+      console.log("[SignOut] Calling Supabase signOut...");
       const { error } = await supabase.auth.signOut();
 
       if (error) {
-        console.error("Supabase signOut failed:", error);
-        toast.error("Failed to sign out. Please try again.");
+        console.error("[SignOut] Supabase signOut failed:", {
+          message: error.message,
+          status: error.status,
+          name: error.name,
+          error,
+        });
+        toast.error(`Failed to sign out: ${error.message}`);
         return;
       }
 
+      console.log("[SignOut] Sign out successful!");
       toast.success("Signed out successfully");
       navigate("/");
       setMenuOpen(false);
     } catch (error) {
-      console.error("Unexpected error during sign out:", error);
+      console.error("[SignOut] Unexpected error during sign out:", error);
       toast.error("Failed to sign out. Please try again.");
     }
   };
