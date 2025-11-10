@@ -18,6 +18,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { UK_FISHERIES, UK_FRESHWATER_SPECIES, normalizeVenueName } from "@/lib/freshwater-data";
 import type { Database } from "@/integrations/supabase/types";
+import { CatchBasicsSection } from "@/components/catch-form/CatchBasicsSection";
+import { LocationSessionSection } from "@/components/catch-form/LocationSessionSection";
+import { TacticsSection } from "@/components/catch-form/TacticsSection";
+import { StorySection } from "@/components/catch-form/StorySection";
+import { ConditionsSection } from "@/components/catch-form/ConditionsSection";
+import { MediaUploadSection } from "@/components/catch-form/MediaUploadSection";
+import { TagsPrivacySection } from "@/components/catch-form/TagsPrivacySection";
 
 const capitalizeFirstWord = (value: string) => {
   if (!value) return "";
@@ -631,1007 +638,191 @@ const AddCatch = () => {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-8">
               {/* Section 1: Catch Basics */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Catch Basics</h3>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="image">Main Photo *</Label>
-                  <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                    {imagePreview ? (
-                      <img src={imagePreview} alt="Preview" className="max-h-48 mx-auto rounded" />
-                    ) : (
-                      <div className="space-y-2">
-                        <Upload className="w-10 h-10 mx-auto text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground">Upload your catch photo</p>
-                      </div>
-                    )}
-                    <Input
-                      id="image"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="mt-4"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="title">Title *</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        title: capitalizeFirstWord(e.target.value),
-                      })
-                    }
-                    placeholder="e.g., Beautiful 20lb Mirror Carp"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="species">Species *</Label>
-                  <Popover
-                    open={speciesPopoverOpen}
-                    onOpenChange={(isOpen) => {
-                      setSpeciesPopoverOpen(isOpen);
-                      if (!isOpen) {
-                        setSpeciesSearch("");
-                      }
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={speciesPopoverOpen}
-                        className="w-full justify-between"
-                      >
-                        {(() => {
-                          const selectedSpecies = UK_FRESHWATER_SPECIES.find((item) => item.value === formData.species);
-                          if (selectedSpecies) return selectedSpecies.label;
-                          if (formData.customSpecies) return formData.customSpecies;
-                          return "Select species";
-                        })()}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[280px] p-0">
-                      <Command>
-                        <CommandInput
-                          placeholder="Search species…"
-                          value={speciesSearch}
-                          onValueChange={setSpeciesSearch}
-                        />
-                        <CommandList>
-                          <CommandEmpty>
-                            {trimmedSpeciesSearch
-                              ? `No species found for "${trimmedSpeciesSearch}"`
-                              : "Start typing to search species"}
-                          </CommandEmpty>
-                          <CommandGroup>
-                            {trimmedSpeciesSearch && !hasExactSpeciesMatch && (
-                              <CommandItem
-                                value={`custom-${trimmedSpeciesSearch.toLowerCase()}`}
-                                onSelect={() => {
-                                  const customValue = toTitleCase(trimmedSpeciesSearch);
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    species: "other",
-                                    customSpecies: customValue,
-                                  }));
-                                  setSpeciesSearch("");
-                                  setSpeciesPopoverOpen(false);
-                                }}
-                              >
-                                Use "{toTitleCase(trimmedSpeciesSearch)}"
-                              </CommandItem>
-                            )}
-                            {(formData.species || formData.customSpecies) && (
-                              <CommandItem
-                                value="clear-selection"
-                                onSelect={() => {
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    species: "",
-                                    customSpecies: "",
-                                  }));
-                                  setSpeciesSearch("");
-                                  setSpeciesPopoverOpen(false);
-                                }}
-                              >
-                                Clear selection
-                              </CommandItem>
-                            )}
-                            {UK_FRESHWATER_SPECIES.filter((species) => species.value !== "other").map((species) => (
-                              <CommandItem
-                                key={species.value}
-                                value={species.label.toLowerCase()}
-                                onSelect={() => {
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    species: species.value,
-                                    customSpecies: "",
-                                  }));
-                                  setSpeciesSearch("");
-                                  setSpeciesPopoverOpen(false);
-                                }}
-                              >
-                                {species.label}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="weight">Weight</Label>
-                    <Input
-                      id="weight"
-                      type="number"
-                      step="0.01"
-                      value={formData.weight}
-                      onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
-                      placeholder="e.g., 20.5"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="weightUnit">Unit</Label>
-                    <Select value={formData.weightUnit} onValueChange={(value) => setFormData({ ...formData, weightUnit: value })}>
-                      <SelectTrigger id="weightUnit">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="lb_oz">lb/oz</SelectItem>
-                        <SelectItem value="kg">kg</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="length">Length (optional)</Label>
-                    <Input
-                      id="length"
-                      type="number"
-                      step="0.1"
-                      value={formData.length}
-                      onChange={(e) => setFormData({ ...formData, length: e.target.value })}
-                      placeholder="e.g., 65"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lengthUnit">Unit</Label>
-                    <Select value={formData.lengthUnit} onValueChange={(value) => setFormData({ ...formData, lengthUnit: value })}>
-                      <SelectTrigger id="lengthUnit">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cm">cm</SelectItem>
-                        <SelectItem value="in">in</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
+              <CatchBasicsSection
+                imageFile={imageFile}
+                imagePreview={imagePreview}
+                title={formData.title}
+                species={formData.species}
+                customSpecies={formData.customSpecies}
+                weight={formData.weight}
+                weightUnit={formData.weightUnit}
+                length={formData.length}
+                lengthUnit={formData.lengthUnit}
+                speciesPopoverOpen={speciesPopoverOpen}
+                speciesSearch={speciesSearch}
+                onImageChange={handleImageChange}
+                onTitleChange={(title) => setFormData({ ...formData, title })}
+                onSpeciesChange={(species, customSpecies) =>
+                  setFormData({ ...formData, species, customSpecies })
+                }
+                onWeightChange={(weight) => setFormData({ ...formData, weight })}
+                onWeightUnitChange={(weightUnit) =>
+                  setFormData({ ...formData, weightUnit })
+                }
+                onLengthChange={(length) => setFormData({ ...formData, length })}
+                onLengthUnitChange={(lengthUnit) =>
+                  setFormData({ ...formData, lengthUnit })
+                }
+                onSpeciesPopoverOpenChange={setSpeciesPopoverOpen}
+                onSpeciesSearchChange={setSpeciesSearch}
+              />
 
               {/* Section 2: Location & Session */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Location & Session</h3>
-                
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="location">Fishery / Venue *</Label>
-                    <Popover open={open} onOpenChange={setOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={open}
-                          className="w-full justify-between"
-                          disabled={useGpsLocation}
-                        >
-                          {formData.location || "Select fishery..."}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-full p-0">
-                        <Command>
-                          <CommandInput placeholder="Search UK fisheries..." />
-                          <CommandList>
-                            <CommandEmpty>No fishery found.</CommandEmpty>
-                            <CommandGroup>
-                              {UK_FISHERIES.map((fishery) => (
-                                <CommandItem
-                                  key={fishery}
-                                  value={fishery}
-                                  onSelect={(currentValue) => {
-                                    const normalized = normalizeVenueName(currentValue);
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      location: normalized === prev.location ? "" : normalized,
-                                      customLocationLabel: "",
-                                    }));
-                                    setUseGpsLocation(false);
-                                    setGpsCoordinates(null);
-                                    setGpsAccuracy(null);
-                                    setOpen(false);
-                                  }}
-                                >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        formData.location === normalizeVenueName(fishery) ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    {fishery}
-                                  </CommandItem>
-                                ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      variant={useGpsLocation ? "ocean" : "outline"}
-                      disabled={isLocating && !useGpsLocation}
-                      onClick={() => {
-                        if (useGpsLocation) {
-                          setUseGpsLocation(false);
-                          setGpsCoordinates(null);
-                          setGpsAccuracy(null);
-                          setFormData((prev) => ({
-                            ...prev,
-                            customLocationLabel: "",
-                          }));
-                          setLocationError(null);
-                          return;
-                        }
-                        void handleUseGps();
-                      }}
-                    >
-                      {isLocating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MapPin className="mr-2 h-4 w-4" />}
-                      {useGpsLocation ? "Clear GPS Pin" : "Use Current GPS"}
-                    </Button>
-                    {!useGpsLocation && (
-                      <span className="text-xs text-muted-foreground">
-                        Prefer to pick from the list? No problem—GPS is optional.
-                      </span>
-                    )}
-                  </div>
-                  {locationError && <p className="text-sm text-destructive">{locationError}</p>}
-                  {gpsCoordinates && (
-                    <div className="space-y-3">
-                      <div className="rounded-lg overflow-hidden border">
-                        <iframe
-                          title="Pinned fishing location"
-                          src={`https://www.google.com/maps?q=${gpsCoordinates.lat},${gpsCoordinates.lng}&z=15&output=embed`}
-                          width="100%"
-                          height="250"
-                          loading="lazy"
-                          allowFullScreen
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Dropped pin at {gpsCoordinates.lat.toFixed(5)}, {gpsCoordinates.lng.toFixed(5)}
-                        {gpsAccuracy ? ` (±${Math.round(gpsAccuracy)}m)` : ""}
-                      </p>
-                      <div className="space-y-1">
-                        <Label htmlFor="customLocationLabel" className="text-xs text-muted-foreground">
-                          Optional label for this spot
-                        </Label>
-                        <Input
-                          id="customLocationLabel"
-                          value={formData.customLocationLabel}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              customLocationLabel: capitalizeFirstWord(e.target.value),
-                            }))
-                          }
-                          placeholder="e.g., Upper lake margins"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="pegOrSwim">Peg / Swim (optional)</Label>
-                  <Input
-                    id="pegOrSwim"
-                    value={formData.pegOrSwim}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        pegOrSwim: capitalizeFirstWord(e.target.value),
-                      })
-                    }
-                    placeholder="e.g., Peg 14"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="caughtAt">Date Caught</Label>
-                    <Input
-                      id="caughtAt"
-                      type="date"
-                      value={formData.caughtAt}
-                      onChange={(e) => setFormData({ ...formData, caughtAt: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="timeOfDay">Time of Day</Label>
-                    <Select value={formData.timeOfDay} onValueChange={(value) => setFormData({ ...formData, timeOfDay: value })}>
-                      <SelectTrigger id="timeOfDay">
-                        <SelectValue placeholder="Select time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="morning">Morning</SelectItem>
-                        <SelectItem value="afternoon">Afternoon</SelectItem>
-                        <SelectItem value="evening">Evening</SelectItem>
-                        <SelectItem value="night">Night</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="waterType">Water Type</Label>
-                  <Popover
-                    open={waterTypePopoverOpen}
-                    onOpenChange={(isOpen) => {
-                      setWaterTypePopoverOpen(isOpen);
-                      if (!isOpen) {
-                        setWaterTypeSearch("");
-                      }
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={waterTypePopoverOpen}
-                        className="w-full justify-between"
-                      >
-                        {(() => {
-                          if (isLoadingWaterTypes) return "Loading water types…";
-                          if (formData.waterType) {
-                            const selected = waterTypeOptions.find((option) => option.code === formData.waterType);
-                            if (selected) return selected.label;
-                            return toTitleCase(formData.waterType.replace(/[-_]/g, " "));
-                          }
-                          return "Select water type";
-                        })()}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[280px] p-0">
-                      <Command>
-                        <CommandInput
-                          placeholder="Search water types…"
-                          value={waterTypeSearch}
-                          onValueChange={setWaterTypeSearch}
-                        />
-                        <CommandList>
-                          <CommandEmpty>
-                            {isLoadingWaterTypes
-                              ? "Loading water types…"
-                              : trimmedWaterTypeSearch
-                                ? `No water types found for "${waterTypeSearch}"`
-                                : "Start typing to search water types"}
-                          </CommandEmpty>
-                          {formData.waterType ? (
-                            <CommandGroup heading="Quick actions">
-                              <CommandItem
-                                value="clear-water-type"
-                                onSelect={() => {
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    waterType: "",
-                                  }));
-                                  setWaterTypeSearch("");
-                                  setWaterTypePopoverOpen(false);
-                                }}
-                              >
-                                Clear selection
-                              </CommandItem>
-                            </CommandGroup>
-                          ) : null}
-                          {Object.entries(waterTypesByGroup).map(([groupLabel, items]) => (
-                            <CommandGroup key={groupLabel} heading={groupLabel}>
-                              {items.map((option) => (
-                                <CommandItem
-                                  key={option.code}
-                                  value={option.code}
-                                  onSelect={() => {
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      waterType: option.code,
-                                    }));
-                                    setWaterTypeSearch("");
-                                    setWaterTypePopoverOpen(false);
-                                  }}
-                                >
-                                  {option.label}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          ))}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="session">Fishing Session</Label>
-                  <Select
-                    value={isCreatingSession ? CREATE_SESSION_OPTION : (selectedSessionId || NO_SESSION_OPTION)}
-                    onValueChange={(value) => {
-                      if (value === CREATE_SESSION_OPTION) {
-                        setIsCreatingSession(true);
-                        setSelectedSessionId("");
-                      } else if (value === NO_SESSION_OPTION) {
-                        setSelectedSessionId("");
-                        setIsCreatingSession(false);
-                      } else {
-                        setSelectedSessionId(value);
-                        setIsCreatingSession(false);
-                      }
-                    }}
-                  >
-                    <SelectTrigger id="session">
-                      <SelectValue placeholder={isLoadingSessions ? "Loading sessions…" : "Select session"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_SESSION_OPTION}>No session</SelectItem>
-                      {sessions.map((session) => (
-                        <SelectItem key={session.id} value={session.id}>
-                          {session.title}
-                          {session.date ? ` • ${new Date(session.date).toLocaleDateString("en-GB")}` : ""}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value={CREATE_SESSION_OPTION}>Create new session</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {selectedSessionId && !isCreatingSession && (
-                    <p className="text-xs text-muted-foreground">
-                      Selected session will group this catch with your other logs from that outing.
-                    </p>
-                  )}
-                  {isCreatingSession && (
-                    <div className="space-y-3 rounded-md border border-dashed border-border/60 bg-muted/20 p-4">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium">Create a new session</p>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs"
-                          onClick={() => {
-                            setIsCreatingSession(false);
-                            setNewSession({ title: "", venue: "", date: new Date().toISOString().split("T")[0], notes: "" });
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="session-title">Session title *</Label>
-                        <Input
-                          id="session-title"
-                          value={newSession.title}
-                          onChange={(event) => setNewSession((prev) => ({ ...prev, title: event.target.value }))}
-                          placeholder="Dawn patrol at Willow Lake"
-                          required
-                        />
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                          <Label htmlFor="session-venue">Venue</Label>
-                          <Input
-                            id="session-venue"
-                            value={newSession.venue}
-                            onChange={(event) => setNewSession((prev) => ({ ...prev, venue: event.target.value }))}
-                            placeholder="Willow Lake"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="session-date">Date</Label>
-                          <Input
-                            id="session-date"
-                            type="date"
-                            value={newSession.date}
-                            onChange={(event) => setNewSession((prev) => ({ ...prev, date: event.target.value }))}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="session-notes">Notes</Label>
-                        <Textarea
-                          id="session-notes"
-                          value={newSession.notes}
-                          onChange={(event) => setNewSession((prev) => ({ ...prev, notes: event.target.value }))}
-                          placeholder="Conditions, tactics, who you fished with…"
-                          rows={3}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <LocationSessionSection
+                location={formData.location}
+                customLocationLabel={formData.customLocationLabel}
+                pegOrSwim={formData.pegOrSwim}
+                caughtAt={formData.caughtAt}
+                timeOfDay={formData.timeOfDay}
+                waterType={formData.waterType}
+                open={open}
+                useGpsLocation={useGpsLocation}
+                isLocating={isLocating}
+                locationError={locationError}
+                gpsCoordinates={gpsCoordinates}
+                gpsAccuracy={gpsAccuracy}
+                waterTypePopoverOpen={waterTypePopoverOpen}
+                waterTypeSearch={waterTypeSearch}
+                isLoadingWaterTypes={isLoadingWaterTypes}
+                waterTypeOptions={waterTypeOptions}
+                waterTypesByGroup={waterTypesByGroup}
+                trimmedWaterTypeSearch={trimmedWaterTypeSearch}
+                selectedSessionId={selectedSessionId}
+                isCreatingSession={isCreatingSession}
+                isLoadingSessions={isLoadingSessions}
+                sessions={sessions}
+                newSession={newSession}
+                CREATE_SESSION_OPTION={CREATE_SESSION_OPTION}
+                NO_SESSION_OPTION={NO_SESSION_OPTION}
+                onLocationChange={(location) =>
+                  setFormData({ ...formData, location })
+                }
+                onCustomLocationLabelChange={(customLocationLabel) =>
+                  setFormData({ ...formData, customLocationLabel })
+                }
+                onPegOrSwimChange={(pegOrSwim) =>
+                  setFormData({ ...formData, pegOrSwim })
+                }
+                onCaughtAtChange={(caughtAt) =>
+                  setFormData({ ...formData, caughtAt })
+                }
+                onTimeOfDayChange={(timeOfDay) =>
+                  setFormData({ ...formData, timeOfDay })
+                }
+                onWaterTypeChange={(waterType) =>
+                  setFormData({ ...formData, waterType })
+                }
+                onOpenChange={setOpen}
+                onUseGpsLocationChange={(
+                  useGps,
+                  coords,
+                  accuracy,
+                  label,
+                  error
+                ) => {
+                  setUseGpsLocation(useGps);
+                  setGpsCoordinates(coords);
+                  setGpsAccuracy(accuracy);
+                  setFormData({ ...formData, customLocationLabel: label });
+                  setLocationError(error);
+                }}
+                onHandleUseGps={handleUseGps}
+                onWaterTypePopoverOpenChange={setWaterTypePopoverOpen}
+                onWaterTypeSearchChange={setWaterTypeSearch}
+                onSelectedSessionIdChange={setSelectedSessionId}
+                onIsCreatingSessionChange={setIsCreatingSession}
+                onNewSessionChange={setNewSession}
+              />
 
               {/* Section 3: Tactics */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Tactics</h3>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="baitUsed">Bait Used</Label>
-                  <Popover
-                    open={baitPopoverOpen}
-                    onOpenChange={(isOpen) => {
-                      setBaitPopoverOpen(isOpen);
-                      if (!isOpen) {
-                        setBaitSearch("");
-                      }
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={baitPopoverOpen}
-                        className="w-full justify-between"
-                      >
-                        {(() => {
-                          if (isLoadingBaits) return "Loading baits…";
-                          if (formData.baitUsed) return formData.baitUsed;
-                          return "Select bait";
-                        })()}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[280px] p-0">
-                      <Command>
-                        <CommandInput
-                          placeholder="Search baits…"
-                          value={baitSearch}
-                          onValueChange={setBaitSearch}
-                        />
-                        <CommandList>
-                          <CommandEmpty>
-                            {isLoadingBaits
-                              ? "Loading baits…"
-                              : trimmedBaitSearch
-                                ? `No baits found for "${baitSearch}"`
-                                : "Start typing to search baits"}
-                          </CommandEmpty>
-                          <CommandGroup heading="Quick actions">
-                            {trimmedBaitSearch && (
-                              <CommandItem
-                                value={`custom-bait-${trimmedBaitSearch}`}
-                                onSelect={() => {
-                                  const customValue = toTitleCase(baitSearch.trim());
-                                  if (!customValue) return;
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    baitUsed: customValue,
-                                  }));
-                                  setBaitSearch("");
-                                  setBaitPopoverOpen(false);
-                                }}
-                              >
-                                Use "{toTitleCase(baitSearch.trim())}"
-                              </CommandItem>
-                            )}
-                            {formData.baitUsed && (
-                              <CommandItem
-                                value="clear-bait-selection"
-                                onSelect={() => {
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    baitUsed: "",
-                                  }));
-                                  setBaitSearch("");
-                                  setBaitPopoverOpen(false);
-                                }}
-                              >
-                                Clear selection
-                              </CommandItem>
-                            )}
-                          </CommandGroup>
-                          {Object.entries(baitsByCategory).map(([category, items]) => (
-                            <CommandGroup key={category} heading={category}>
-                              {items.map((bait) => (
-                                <CommandItem
-                                  key={bait.slug}
-                                  value={bait.slug}
-                                  onSelect={() => {
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      baitUsed: bait.label,
-                                    }));
-                                    setBaitSearch("");
-                                    setBaitPopoverOpen(false);
-                                  }}
-                                >
-                                  {bait.label}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          ))}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="method">Method</Label>
-                  <Popover
-                    open={methodPopoverOpen}
-                    onOpenChange={(isOpen) => {
-                      setMethodPopoverOpen(isOpen);
-                      if (!isOpen) {
-                        setMethodSearch("");
-                      }
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={methodPopoverOpen}
-                        className="w-full justify-between"
-                      >
-                        {(() => {
-                          if (isLoadingMethods) return "Loading methods…";
-                          if (formData.method === "other") {
-                            return formData.customMethod || "Other";
-                          }
-                          if (formData.method) {
-                            const selected = methodOptions.find((item) => item.slug === formData.method);
-                            if (selected) return selected.label;
-                            return toTitleCase(formData.method.replace(/[-_]/g, " "));
-                          }
-                          return "Select method";
-                        })()}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[280px] p-0">
-                      <Command>
-                        <CommandInput
-                          placeholder="Search methods…"
-                          value={methodSearch}
-                          onValueChange={setMethodSearch}
-                        />
-                        <CommandList>
-                          <CommandEmpty>
-                            {isLoadingMethods
-                              ? "Loading methods…"
-                              : trimmedMethodSearch
-                                ? `No methods found for "${methodSearch}"`
-                                : "Start typing to search methods"}
-                          </CommandEmpty>
-                          <CommandGroup heading="Quick actions">
-                            {trimmedMethodSearch && (
-                              <CommandItem
-                                value={`custom-${trimmedMethodSearch}`}
-                                onSelect={() => {
-                                  const customValue = toTitleCase(methodSearch.trim());
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    method: "other",
-                                    customMethod: customValue,
-                                  }));
-                                  setMethodSearch("");
-                                  setMethodPopoverOpen(false);
-                                }}
-                              >
-                                Use "{toTitleCase(methodSearch.trim())}"
-                              </CommandItem>
-                            )}
-                            {formData.method || formData.customMethod ? (
-                              <CommandItem
-                                value="clear-method-selection"
-                                onSelect={() => {
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    method: "",
-                                    customMethod: "",
-                                  }));
-                                  setMethodSearch("");
-                                  setMethodPopoverOpen(false);
-                                }}
-                              >
-                                Clear selection
-                              </CommandItem>
-                            ) : null}
-                            <CommandItem
-                              value="select-other-method"
-                              onSelect={() => {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  method: "other",
-                                  customMethod: prev.customMethod,
-                                }));
-                                setMethodPopoverOpen(false);
-                                setMethodSearch("");
-                              }}
-                            >
-                              Other (describe manually)
-                            </CommandItem>
-                          </CommandGroup>
-                          {Object.entries(methodsByGroup).map(([groupLabel, items]) => (
-                            <CommandGroup key={groupLabel} heading={groupLabel}>
-                              {items.map((method) => (
-                                <CommandItem
-                                  key={method.slug}
-                                  value={method.slug}
-                                  onSelect={() => {
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      method: method.slug,
-                                      customMethod: "",
-                                    }));
-                                    setMethodSearch("");
-                                    setMethodPopoverOpen(false);
-                                  }}
-                                >
-                                  {method.label}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          ))}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  {formData.method === "other" && (
-                    <div className="space-y-1">
-                      <Label htmlFor="customMethod" className="text-xs text-muted-foreground">
-                        Describe the method
-                      </Label>
-                      <Input
-                        id="customMethod"
-                        value={formData.customMethod}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            customMethod: capitalizeFirstWord(e.target.value),
-                          }))
-                        }
-                        placeholder="e.g., Zigs"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="equipmentUsed">Equipment</Label>
-                  <Input
-                    id="equipmentUsed"
-                    value={formData.equipmentUsed}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        equipmentUsed: capitalizeFirstWord(e.target.value),
-                      })
-                    }
-                    placeholder="e.g., 12ft carp rod, baitrunner reel"
-                  />
-                </div>
-              </div>
+              <TacticsSection
+                baitUsed={formData.baitUsed}
+                method={formData.method}
+                customMethod={formData.customMethod}
+                equipmentUsed={formData.equipmentUsed}
+                baitPopoverOpen={baitPopoverOpen}
+                methodPopoverOpen={methodPopoverOpen}
+                baitSearch={baitSearch}
+                methodSearch={methodSearch}
+                isLoadingBaits={isLoadingBaits}
+                isLoadingMethods={isLoadingMethods}
+                baitsByCategory={baitsByCategory}
+                methodsByGroup={methodsByGroup}
+                trimmedBaitSearch={trimmedBaitSearch}
+                trimmedMethodSearch={trimmedMethodSearch}
+                onBaitUsedChange={(baitUsed) =>
+                  setFormData({ ...formData, baitUsed })
+                }
+                onMethodChange={(method, customMethod) =>
+                  setFormData({ ...formData, method, customMethod })
+                }
+                onCustomMethodChange={(customMethod) =>
+                  setFormData({ ...formData, customMethod })
+                }
+                onEquipmentUsedChange={(equipmentUsed) =>
+                  setFormData({ ...formData, equipmentUsed })
+                }
+                onBaitPopoverOpenChange={setBaitPopoverOpen}
+                onMethodPopoverOpenChange={setMethodPopoverOpen}
+                onBaitSearchChange={setBaitSearch}
+                onMethodSearchChange={setMethodSearch}
+              />
 
               {/* Section 4: Story */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Your Story</h3>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        description: capitalizeFirstWord(e.target.value),
-                      })
-                    }
-                    placeholder="Tell the story of this catch... What happened? What was special about it?"
-                    rows={5}
-                  />
-                </div>
-              </div>
+              <StorySection
+                description={formData.description}
+                onDescriptionChange={(description) =>
+                  setFormData({ ...formData, description })
+                }
+              />
 
               {/* Section 5: Conditions (Collapsible) */}
-              <Collapsible open={showConditions} onOpenChange={setShowConditions}>
-                <CollapsibleTrigger asChild>
-                  <Button variant="outline" className="w-full flex justify-between" type="button">
-                    <span>Conditions (optional)</span>
-                    <ChevronDown className={cn("h-4 w-4 transition-transform", showConditions && "rotate-180")} />
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="space-y-4 mt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="weather">Weather</Label>
-                      <Select value={formData.weather} onValueChange={(value) => setFormData({ ...formData, weather: value })}>
-                        <SelectTrigger id="weather">
-                          <SelectValue placeholder="Select weather" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="sunny">Sunny</SelectItem>
-                          <SelectItem value="overcast">Overcast</SelectItem>
-                          <SelectItem value="raining">Raining</SelectItem>
-                          <SelectItem value="windy">Windy</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="airTemp">Air Temp (°C)</Label>
-                      <Input
-                        id="airTemp"
-                        type="number"
-                        value={formData.airTemp}
-                        onChange={(e) => setFormData({ ...formData, airTemp: e.target.value })}
-                        placeholder="e.g., 18"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="waterClarity">Water Clarity</Label>
-                      <Select value={formData.waterClarity} onValueChange={(value) => setFormData({ ...formData, waterClarity: value })}>
-                        <SelectTrigger id="waterClarity">
-                          <SelectValue placeholder="Select clarity" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="clear">Clear</SelectItem>
-                          <SelectItem value="coloured">Coloured</SelectItem>
-                          <SelectItem value="unknown">Unknown</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="windDirection">Wind Direction</Label>
-                      <Input
-                        id="windDirection"
-                        value={formData.windDirection}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            windDirection: capitalizeFirstWord(e.target.value),
-                          })
-                        }
-                        placeholder="e.g., SW"
-                      />
-                    </div>
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
+              <ConditionsSection
+                showConditions={showConditions}
+                weather={formData.weather}
+                airTemp={formData.airTemp}
+                waterClarity={formData.waterClarity}
+                windDirection={formData.windDirection}
+                onShowConditionsChange={setShowConditions}
+                onWeatherChange={(weather) => setFormData({ ...formData, weather })}
+                onAirTempChange={(airTemp) => setFormData({ ...formData, airTemp })}
+                onWaterClarityChange={(waterClarity) =>
+                  setFormData({ ...formData, waterClarity })
+                }
+                onWindDirectionChange={(windDirection) =>
+                  setFormData({ ...formData, windDirection })
+                }
+              />
 
               {/* Section 6: Media */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Additional Media</h3>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="gallery">Gallery Photos (up to 6)</Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {galleryPreviews.map((preview, index) => (
-                      <div key={index} className="relative">
-                        <img src={preview} alt={`Gallery ${index + 1}`} className="w-full h-24 object-cover rounded" />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="icon"
-                          className="absolute top-1 right-1 h-6 w-6"
-                          onClick={() => removeGalleryImage(index)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                    {galleryFiles.length < 6 && (
-                      <label className="border-2 border-dashed rounded flex items-center justify-center h-24 cursor-pointer hover:bg-accent">
-                        <Plus className="h-6 w-6 text-muted-foreground" />
-                        <Input
-                          id="gallery"
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={handleGalleryChange}
-                          className="hidden"
-                        />
-                      </label>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="videoUrl">Video URL (optional)</Label>
-                  <Input
-                    id="videoUrl"
-                    value={formData.videoUrl}
-                    onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })}
-                    placeholder="e.g., YouTube or Vimeo link"
-                  />
-                </div>
-              </div>
+              <MediaUploadSection
+                galleryFiles={galleryFiles}
+                galleryPreviews={galleryPreviews}
+                videoUrl={formData.videoUrl}
+                onGalleryChange={handleGalleryChange}
+                onRemoveGalleryImage={removeGalleryImage}
+                onVideoUrlChange={(videoUrl) =>
+                  setFormData({ ...formData, videoUrl })
+                }
+              />
 
               {/* Section 7: Tags & Privacy */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Tags & Privacy</h3>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="tags">Tags (comma-separated)</Label>
-                  <Input
-                    id="tags"
-                    value={formData.tags}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        tags: capitalizeFirstWord(e.target.value),
-                      })
-                    }
-                    placeholder="e.g., #carp, #summer, #pb"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="visibility">Visibility</Label>
-                  <Select value={formData.visibility} onValueChange={(value) => setFormData({ ...formData, visibility: value })}>
-                    <SelectTrigger id="visibility">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="public">Public</SelectItem>
-                      <SelectItem value="followers">Followers Only</SelectItem>
-                      <SelectItem value="private">Private</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="hideExactSpot">Hide exact peg/swim</Label>
-                    <p className="text-sm text-muted-foreground">Keep your fishing spot private</p>
-                  </div>
-                  <Switch
-                    id="hideExactSpot"
-                    checked={formData.hideExactSpot}
-                    onCheckedChange={(checked) => setFormData({ ...formData, hideExactSpot: checked })}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="allowRatings">Allow community ratings</Label>
-                    <p className="text-sm text-muted-foreground">Let others rate your catch</p>
-                  </div>
-                  <Switch
-                    id="allowRatings"
-                    checked={formData.allowRatings}
-                    onCheckedChange={(checked) => setFormData({ ...formData, allowRatings: checked })}
-                  />
-                </div>
-              </div>
+              <TagsPrivacySection
+                tags={formData.tags}
+                visibility={formData.visibility}
+                hideExactSpot={formData.hideExactSpot}
+                allowRatings={formData.allowRatings}
+                onTagsChange={(tags) => setFormData({ ...formData, tags })}
+                onVisibilityChange={(visibility) =>
+                  setFormData({ ...formData, visibility })
+                }
+                onHideExactSpotChange={(hideExactSpot) =>
+                  setFormData({ ...formData, hideExactSpot })
+                }
+                onAllowRatingsChange={(allowRatings) =>
+                  setFormData({ ...formData, allowRatings })
+                }
+              />
 
               <Button type="submit" className="w-full" size="lg" disabled={isSubmitting || !imageFile}>
                 {isSubmitting ? "Publishing Catch..." : "Publish Catch"}
