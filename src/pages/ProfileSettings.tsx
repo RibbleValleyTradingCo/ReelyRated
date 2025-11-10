@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { useAuth } from "@/components/AuthProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { callServerLogout } from "@/lib/auth/helpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -234,6 +235,11 @@ const ProfileSettings = () => {
   };
 
   const handleSignOut = async () => {
+    try {
+      await callServerLogout();
+    } catch (error) {
+      console.error("Logout endpoint failed", error);
+    }
     await supabase.auth.signOut();
     toast.success("Signed out");
     navigate("/auth");

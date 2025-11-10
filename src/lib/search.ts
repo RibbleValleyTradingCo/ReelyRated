@@ -2,6 +2,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { UK_FRESHWATER_SPECIES } from "@/lib/freshwater-data";
 import { canViewCatch, shouldShowExactLocation } from "@/lib/visibility";
 import type { Database } from "@/integrations/supabase/types";
+import { searchCatches } from "@/lib/data/catches";
+import { sanitizeSearchInput, escapeLikePattern } from "@/lib/security/query-sanitizer";
 
 export interface SearchProfile {
   id: string;
@@ -17,7 +19,7 @@ export interface SearchCatch {
   species: string | null;
   location: string | null;
   hide_exact_spot: boolean | null;
-  conditions: Record<string, unknown> | null;
+  conditions?: Record<string, unknown> | null;
   profiles: {
     username: string;
     avatar_path: string | null;
@@ -63,13 +65,13 @@ export const searchAll = async (
   options: SearchOptions = {}
 ): Promise<SearchResults> => {
   const trimmed = query.trim();
-  if (!trimmed) {
+  const sanitized = sanitizeSearchInput(trimmed);
+  if (!sanitized) {
     return { profiles: [], catches: [], venues: [], errors: [] };
   }
 
-  const sanitized = trimmed.replace(/'/g, "''");
-  const likePattern = `%${sanitized}%`;
-  const lowerTrimmed = trimmed.toLowerCase();
+  const likePattern = `%${escapeLikePattern(sanitized)}%`;
+  const lowerTrimmed = sanitized.toLowerCase();
 
   const {
     profileLimit,
@@ -106,34 +108,7 @@ export const searchAll = async (
     return label.includes(lowerTrimmed) || value.includes(lowerTrimmed);
   }).map((species) => species.value);
 
-  const catchOrFilters = [
-    `title.ilike.${likePattern}`,
-    `location.ilike.${likePattern}`,
-    `conditions->customFields->>species.ilike.${likePattern}`,
-  ];
-
-  if (speciesCandidates.length > 0) {
-    catchOrFilters.push(`species.in.(${speciesCandidates.join(",")})`);
-  }
-
-  const catchPromise = supabase
-    .from("catches")
-    .select(
-      `
-        id,
-        title,
-        species,
-        location,
-        visibility,
-        user_id,
-        hide_exact_spot,
-        conditions,
-        profiles:user_id (username, avatar_path, avatar_url)
-      `
-    )
-    .or(catchOrFilters.join(","))
-    .order("created_at", { ascending: false })
-    .limit(catchLimit);
+  const catchPromise = searchCatches(sanitized, catchLimit, speciesCandidates);
 
   const venuesPromise = supabase
     .from("catches")

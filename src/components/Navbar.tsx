@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "@/components/AuthProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Menu, Search as SearchIcon, X } from "lucide-react";
@@ -10,6 +10,7 @@ import { isAdminUser } from "@/lib/admin";
 import LogoMark from "@/components/LogoMark";
 import { MobileMenu, MOBILE_MENU_ID } from "@/components/MobileMenu";
 import { cn } from "@/lib/utils";
+import { callServerLogout } from "@/lib/auth/helpers";
 
 export const Navbar = () => {
   const { user } = useAuth();
@@ -52,6 +53,12 @@ export const Navbar = () => {
   }, [user]);
 
   const handleSignOut = async () => {
+    try {
+      await callServerLogout();
+    } catch (error) {
+      console.error("Logout endpoint failed", error);
+    }
+
     await supabase.auth.signOut();
     toast.success("Signed out successfully");
     navigate("/");

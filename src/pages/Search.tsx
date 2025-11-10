@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, Search as SearchIcon } from "lucide-react";
-import { useAuth } from "@/components/AuthProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import {
   formatSpeciesName,
@@ -44,12 +44,13 @@ const SearchPage = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [followingIds, setFollowingIds] = useState<string[]>([]);
 
   useEffect(() => {
     let active = true;
 
-    if (!user) {
+    if (!userId) {
       setFollowingIds([]);
       return () => {
         active = false;
@@ -59,7 +60,7 @@ const SearchPage = () => {
     supabase
       .from("profile_follows")
       .select("following_id")
-      .eq("follower_id", user.id)
+      .eq("follower_id", userId)
       .then(({ data, error }) => {
         if (!active) return;
         if (error) {
@@ -73,7 +74,7 @@ const SearchPage = () => {
     return () => {
       active = false;
     };
-  }, [user?.id]);
+  }, [userId]);
 
   useEffect(() => {
     setQuery(queryParam);
@@ -108,7 +109,7 @@ const SearchPage = () => {
       profileLimit: 20,
       catchLimit: 20,
       venueLimit: 30,
-      viewerId: user?.id ?? null,
+      viewerId: userId,
       followingIds,
     })
       .then((results) => {
@@ -132,7 +133,7 @@ const SearchPage = () => {
     return () => {
       active = false;
     };
-  }, [queryParam, user?.id, followingIds]);
+  }, [queryParam, userId, followingIds]);
 
   const hasActiveQuery = queryParam.trim().length > 0;
   const hasResults = useMemo(
@@ -254,8 +255,8 @@ const SearchPage = () => {
                     <CardContent className="divide-y p-0">
                       {catches.map((catchItem) => {
                         const customSpecies =
-                          (catchItem.conditions as Record<string, any> | null)?.customFields?.species ??
-                          null;
+                          ((catchItem.conditions as { customFields?: { species?: string | null } } | null)?.customFields
+                            ?.species ?? null);
                         const species =
                           formatSpeciesName(catchItem.species, customSpecies) ?? "Catch";
                         const locationLabel = catchItem.location

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/components/AuthProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,10 +50,15 @@ const Auth = () => {
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
+    const redirectTo =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/`
+        : `${import.meta.env.VITE_APP_URL ?? ""}/`;
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo,
       },
     });
 

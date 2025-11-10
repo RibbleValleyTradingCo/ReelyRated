@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { useAuth } from "@/components/AuthProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchCatchForViewer } from "@/lib/data/catches";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import {
@@ -155,20 +156,20 @@ const CatchDetail = () => {
   const fetchCatchData = useCallback(async () => {
     if (!id) return;
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from("catches")
-      .select("*, profiles:user_id (username, avatar_path, avatar_url), session:session_id (id, title, venue, date)")
-      .eq("id", id)
-      .single();
-
-    if (error) {
-      toast.error("Failed to load catch");
-      navigate("/feed");
-    } else {
+    try {
+      const { data, error } = await fetchCatchForViewer(id, user?.id ?? null);
+      if (error || !data) {
+        throw error ?? new Error("Catch not found");
+      }
       setCatchData(data as CatchData);
+    } catch (error) {
+      console.error("Error fetching catch:", error);
+      toast.error("Failed to load catch details");
+      navigate("/feed");
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
-  }, [id, navigate]);
+  }, [id, navigate, user?.id]);
 
   const fetchRatings = useCallback(async () => {
     if (!id) return;
@@ -558,7 +559,8 @@ const CatchDetail = () => {
   const customSpecies = customFields.species;
   const customMethod = customFields.method;
   const gpsData = catchData.conditions?.gps;
-  const showGpsMap = !catchData.hide_exact_spot && gpsData;
+  const hasGpsData = Boolean(gpsData?.lat && gpsData?.lng);
+  const showGpsMap = Boolean(hasGpsData && !catchData.hide_exact_spot);
   const profile = catchData.profiles ?? {
     username: "Unknown angler",
     avatar_url: null,

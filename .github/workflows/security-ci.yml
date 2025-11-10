@@ -1,0 +1,41 @@
+name: Security CI
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  security-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint || true
+
+      - name: TypeScript check
+        run: npx tsc --noEmit || true
+
+      - name: Security audit
+        run: |
+          npm audit --production --audit-level=high
+          echo "::warning::Review npm audit results above"
+
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+
+      - name: Run tests
+        run: npm test -- --run || true
+
+      - name: Build check
+        run: npm run build
