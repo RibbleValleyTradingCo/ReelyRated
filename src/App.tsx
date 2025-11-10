@@ -25,36 +25,40 @@ const LeaderboardPage = lazy(() => import("./pages/LeaderboardPage"));
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <Suspense fallback={<PageLoadingFallback />}>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/feed" element={<Feed />} />
-              <Route path="/leaderboard" element={<LeaderboardPage />} />
-              <Route path="/add-catch" element={<AddCatch />} />
-              <Route path="/catch/:id" element={<CatchDetail />} />
-              <Route path="/profile/:slug" element={<Profile />} />
-              <Route path="/settings/profile" element={<ProfileSettings />} />
-              <Route path="/sessions" element={<Sessions />} />
-              <Route path="/admin/reports" element={<AdminReports />} />
-              <Route path="/admin/audit-log" element={<AdminAuditLog />} />
-              <Route path="/search" element={<SearchPage />} />
-              <Route path="/insights" element={<Insights />} />
-              <Route path="/venues/:slug" element={<VenueDetail />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  useAuthCallback();
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/feed" element={<Feed />} />
+                <Route path="/leaderboard" element={<LeaderboardPage />} />
+                <Route path="/add-catch" element={<AddCatch />} />
+                <Route path="/catch/:id" element={<CatchDetail />} />
+                <Route path="/profile/:slug" element={<Profile />} />
+                <Route path="/settings/profile" element={<ProfileSettings />} />
+                <Route path="/sessions" element={<Sessions />} />
+                <Route path="/admin/reports" element={<AdminReports />} />
+                <Route path="/admin/audit-log" element={<AdminAuditLog />} />
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/insights" element={<Insights />} />
+                <Route path="/venues/:slug" element={<VenueDetail />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

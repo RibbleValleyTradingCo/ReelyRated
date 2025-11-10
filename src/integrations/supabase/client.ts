@@ -136,7 +136,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
     storageKey: AUTH_STORAGE_KEY,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: true,
     flowType: "pkce",
   },
 });
