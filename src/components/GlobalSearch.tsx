@@ -11,6 +11,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { resolveAvatarUrl } from "@/lib/storage";
 import { getProfilePath } from "@/lib/profile";
 import { useFollowingIds } from "@/hooks/useFollowingIds";
+import { useRateLimit, RATE_LIMIT_PRESETS } from "@/hooks/useRateLimit";
+import { retryWithBackoff } from "@/lib/retry";
+import { toast } from "sonner";
 
 export const GlobalSearch = () => {
   const navigate = useNavigate();
@@ -28,6 +31,9 @@ export const GlobalSearch = () => {
   const userId = user?.id ?? null;
   const { data: followingIds = [] } = useFollowingIds(userId);
   const trimmedQuery = useMemo(() => debouncedQuery.trim(), [debouncedQuery]);
+
+  // Rate limiting: 20 searches per minute
+  const { checkRateLimit, getTimeUntilReset } = useRateLimit(RATE_LIMIT_PRESETS.search);
 
   const resetResults = () => {
     setProfiles([]);
@@ -53,14 +59,36 @@ export const GlobalSearch = () => {
     setLoading(true);
 
     const performSearch = async () => {
+      // Check rate limit before making request
+      if (!checkRateLimit()) {
+        if (!active) return;
+        const timeUntilReset = getTimeUntilReset();
+        const secondsUntilReset = Math.ceil(timeUntilReset / 1000);
+        toast.error(`Too many searches. Please wait ${secondsUntilReset} seconds.`);
+        setLoading(false);
+        return;
+      }
+
       try {
-        const results = await searchAll(trimmedQuery, {
-          profileLimit: 5,
-          catchLimit: 5,
-          venueLimit: 8,
-          viewerId: userId,
-          followingIds,
-        });
+        // Use retry logic for transient failures
+        const results = await retryWithBackoff(
+          async () => {
+            return await searchAll(trimmedQuery, {
+              profileLimit: 5,
+              catchLimit: 5,
+              venueLimit: 8,
+              viewerId: userId,
+              followingIds,
+            });
+          },
+          {
+            maxRetries: 2,
+            baseDelay: 500,
+            onRetry: (attempt) => {
+              console.log(`Search retry attempt ${attempt}`);
+            },
+          }
+        );
 
         if (!active) return;
         setProfiles(results.profiles);
@@ -83,7 +111,7 @@ export const GlobalSearch = () => {
     return () => {
       active = false;
     };
-  }, [trimmedQuery, userId, followingIds]);
+  }, [trimmedQuery, userId, followingIds, checkRateLimit, getTimeUntilReset]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

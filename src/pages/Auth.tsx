@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Chrome } from "lucide-react";
 import LogoMark from "@/components/LogoMark";
+import { useRateLimit, RATE_LIMIT_PRESETS } from "@/hooks/useRateLimit";
+import { retryWithBackoff } from "@/lib/retry";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -19,6 +21,9 @@ const Auth = () => {
   const [username, setUsername] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // Rate limiting: 5 auth attempts per 5 minutes
+  const { checkRateLimit, getTimeUntilReset } = useRateLimit(RATE_LIMIT_PRESETS.auth);
+
   useEffect(() => {
     if (!loading && user) {
       navigate("/");
@@ -27,28 +32,60 @@ const Auth = () => {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check rate limit
+    if (!checkRateLimit()) {
+      const timeUntilReset = getTimeUntilReset();
+      const minutesUntilReset = Math.ceil(timeUntilReset / 60000);
+      toast.error(`Too many signup attempts. Please wait ${minutesUntilReset} minute(s).`);
+      return;
+    }
+
     setIsLoading(true);
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: {
-          username,
+    try {
+      const { error } = await retryWithBackoff(
+        async () => {
+          const result = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              emailRedirectTo: `${window.location.origin}/`,
+              data: {
+                username,
+              },
+            },
+          });
+          if (result.error) throw result.error;
+          return result;
         },
-      },
-    });
+        {
+          maxRetries: 2,
+          baseDelay: 1000,
+        }
+      );
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("Account created! Redirecting...");
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success("Account created! Redirecting...");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to sign up");
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleGoogleSignIn = async () => {
+    // Check rate limit
+    if (!checkRateLimit()) {
+      const timeUntilReset = getTimeUntilReset();
+      const minutesUntilReset = Math.ceil(timeUntilReset / 60000);
+      toast.error(`Too many login attempts. Please wait ${minutesUntilReset} minute(s).`);
+      return;
+    }
+
     setIsLoading(true);
     const redirectTo =
       typeof window !== "undefined"
@@ -72,20 +109,44 @@ const Auth = () => {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check rate limit
+    if (!checkRateLimit()) {
+      const timeUntilReset = getTimeUntilReset();
+      const minutesUntilReset = Math.ceil(timeUntilReset / 60000);
+      toast.error(`Too many login attempts. Please wait ${minutesUntilReset} minute(s).`);
+      return;
+    }
+
     setIsLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { error } = await retryWithBackoff(
+        async () => {
+          const result = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (result.error) throw result.error;
+          return result;
+        },
+        {
+          maxRetries: 2,
+          baseDelay: 1000,
+        }
+      );
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("Welcome back!");
-      navigate("/");
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success("Welcome back!");
+        navigate("/");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to sign in");
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   if (loading) {
