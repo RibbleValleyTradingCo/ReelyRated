@@ -19,6 +19,7 @@ import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { extractCustomSpecies, formatSpeciesLabel } from "@/lib/formatters/species";
 import { formatWeightLabel } from "@/lib/formatters/weights";
 import { useFollowingIds } from "@/hooks/useFollowingIds";
+import { getCatchImageProps } from "@/lib/responsive-images";
 
 const capitalizeFirstWord = (value: string) => {
   if (!value) return "";
@@ -325,7 +326,7 @@ const Feed = () => {
             >
               <CardContent className="p-0 relative">
                 <img
-                  src={catchItem.image_url}
+                  {...getCatchImageProps(catchItem.image_url)}
                   alt={catchItem.title}
                   loading="lazy"
                   decoding="async"

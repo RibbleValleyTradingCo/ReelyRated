@@ -10,6 +10,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { extractCustomSpecies, formatSpeciesLabel } from "@/lib/formatters/species";
 import { formatWeightLabel } from "@/lib/formatters/weights";
+import { getThumbnailProps } from "@/lib/responsive-images";
 
 const dateFormatter = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" });
 
@@ -31,11 +32,14 @@ const formatDate = (iso: string | null) => {
 
 const getThumbnail = (gallery: string[] | null, fallback?: string | null) => {
   if (gallery && gallery.length > 0) {
-    return { src: gallery[0], srcSet: undefined, sizes: undefined };
+    // User-uploaded image - use responsive variants
+    return getThumbnailProps(gallery[0]);
   }
   if (fallback) {
-    return { src: fallback, srcSet: undefined, sizes: undefined };
+    // User-uploaded fallback image - use responsive variants
+    return getThumbnailProps(fallback);
   }
+  // Static hero fish asset - already has manual srcSet
   return { src: heroFishFull, srcSet: HERO_FISH_SRCSET, sizes: HERO_FISH_SIZES };
 };
 

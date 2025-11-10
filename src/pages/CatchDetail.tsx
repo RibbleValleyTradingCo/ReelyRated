@@ -52,6 +52,7 @@ import ShareCard from "@/components/ShareCard";
 import ReportButton from "@/components/ReportButton";
 import { extractCustomSpecies, formatSpeciesLabel } from "@/lib/formatters/species";
 import { formatWeightLabel } from "@/lib/formatters/weights";
+import { getCatchDetailImageProps, getGalleryThumbProps } from "@/lib/responsive-images";
 
 type CustomFields = {
   species?: string;
@@ -608,7 +609,7 @@ const CatchDetail = () => {
         {/* Hero Section */}
         <div className="relative mb-8">
           <img
-            src={catchData.image_url}
+            {...getCatchDetailImageProps(catchData.image_url)}
             alt={catchData.title}
             loading="lazy"
             decoding="async"
@@ -757,7 +758,7 @@ const CatchDetail = () => {
                     {catchData.gallery_photos.map((photo, index) => (
                       <img
                         key={index}
-                        src={photo}
+                        {...getGalleryThumbProps(photo)}
                         alt={`Gallery ${index + 1}`}
                         loading="lazy"
                         decoding="async"
