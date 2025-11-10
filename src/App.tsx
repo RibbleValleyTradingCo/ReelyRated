@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/components/AuthProvider";
 import { PageLoadingFallback } from "@/components/LoadingSpinner";
+import { useAuthCallback } from "@/hooks/useAuthCallback";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 
