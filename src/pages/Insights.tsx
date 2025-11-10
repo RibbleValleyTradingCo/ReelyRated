@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useId } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,8 +12,18 @@ import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Loader2, Trophy, Fish, Anchor, BarChart3, Layers, CalendarDays, Sparkles, Scale, CloudSun, MapPin } from "lucide-react";
-import { ResponsiveLine } from "@nivo/line";
-import { ResponsiveBar } from "@nivo/bar";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
 import { getFreshwaterSpeciesLabel } from "@/lib/freshwater-data";
 import type { DateRange } from "react-day-picker";
 
@@ -58,7 +68,6 @@ const WEIGHT_CONVERSION = {
   kg: 1,
 };
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
-const sanitizeId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, "");
 
 const toKg = (weight: number | null, unit: string | null) => {
   if (!weight) return 0;
@@ -343,70 +352,6 @@ const Insights = () => {
   const [selectedVenue, setSelectedVenue] = useState<string>("all");
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [customRangeOpen, setCustomRangeOpen] = useState(false);
-
-  const rawTrendGradientId = useId();
-  const rawTimeGradientId = useId();
-  const rawBaitGradientId = useId();
-  const rawMethodGradientId = useId();
-  const rawSpeciesGradientId = useId();
-
-  const trendGradientId = useMemo(() => sanitizeId(`trend-${rawTrendGradientId}`), [rawTrendGradientId]);
-  const timeGradientId = useMemo(() => sanitizeId(`time-${rawTimeGradientId}`), [rawTimeGradientId]);
-  const baitGradientId = useMemo(() => sanitizeId(`bait-${rawBaitGradientId}`), [rawBaitGradientId]);
-  const methodGradientId = useMemo(() => sanitizeId(`method-${rawMethodGradientId}`), [rawMethodGradientId]);
-  const speciesGradientId = useMemo(() => sanitizeId(`species-${rawSpeciesGradientId}`), [rawSpeciesGradientId]);
-
-  const primaryColor = "hsl(var(--primary))";
-  const secondaryColor = "hsl(var(--secondary))";
-  const borderColor = "rgba(148, 163, 184, 0.2)";
-
-  const nivoTheme = useMemo(
-    () => ({
-      textColor: "var(--muted-foreground)",
-      fontSize: 12,
-      axis: {
-        domain: {
-          line: {
-            stroke: borderColor,
-          },
-        },
-        ticks: {
-          line: {
-            stroke: borderColor,
-          },
-          text: {
-            fill: "var(--muted-foreground)",
-          },
-        },
-        legend: {
-          text: {
-            fill: "var(--muted-foreground)",
-          },
-        },
-      },
-      grid: {
-        line: {
-          stroke: borderColor,
-        },
-      },
-      legends: {
-        text: {
-          fill: "var(--muted-foreground)",
-        },
-      },
-      tooltip: {
-        container: {
-          background: "hsl(var(--popover))",
-          color: "hsl(var(--popover-foreground))",
-          borderRadius: 8,
-          border: "1px solid hsl(var(--border))",
-          boxShadow: "0 12px 40px rgba(15, 23, 42, 0.15)",
-          padding: "0.5rem 0.75rem",
-        },
-      },
-    }),
-    [borderColor]
-  );
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -1023,44 +968,54 @@ const Insights = () => {
                         <p className="text-sm text-muted-foreground">Add more catches to reveal the timeline.</p>
                       ) : (
                         <div className="h-72 w-full">
-                          <ResponsiveLine
-                            data={trendLineData}
-                            theme={nivoTheme}
-                            colors={[primaryColor]}
-                            margin={{ top: 24, right: 24, bottom: 40, left: 48 }}
-                            xScale={{ type: "point" }}
-                            yScale={{ type: "linear", min: 0, stack: false, nice: true }}
-                            enableArea
-                            areaBaselineValue={0}
-                            defs={[
-                              {
-                                id: trendGradientId,
-                                type: "linearGradient",
-                                colors: [
-                                  { offset: 0, color: primaryColor, opacity: 0.35 },
-                                  { offset: 100, color: primaryColor, opacity: 0.05 },
-                                ],
-                              },
-                            ]}
-                            fill={[{ match: "*", id: trendGradientId }]}
-                            axisBottom={{ tickSize: 0, tickPadding: 8, legendOffset: 32 }}
-                            axisLeft={{ tickSize: 0, tickPadding: 8 }}
-                            pointSize={8}
-                            pointColor={primaryColor}
-                            pointBorderWidth={2}
-                            pointBorderColor="hsl(var(--background))"
-                            enableGridX={false}
-                            enableGridY
-                            gridYValues={5}
-                            useMesh
-                            animate={false}
-                            tooltip={({ point }) => (
-                              <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
-                                <p className="font-medium">{point.data.xFormatted}</p>
-                                <p>{point.data.yFormatted} catches</p>
-                              </div>
-                            )}
-                          />
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={monthlyCounts} margin={{ top: 24, right: 24, bottom: 40, left: 8 }}>
+                              <defs>
+                                <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+                                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.05} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
+                              <XAxis
+                                dataKey="label"
+                                stroke="hsl(var(--muted-foreground))"
+                                fontSize={12}
+                                tickLine={false}
+                                axisLine={false}
+                              />
+                              <YAxis
+                                stroke="hsl(var(--muted-foreground))"
+                                fontSize={12}
+                                tickLine={false}
+                                axisLine={false}
+                                allowDecimals={false}
+                              />
+                              <Tooltip
+                                content={({ active, payload }) => {
+                                  if (active && payload && payload.length) {
+                                    return (
+                                      <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
+                                        <p className="font-medium">{payload[0].payload.label}</p>
+                                        <p>{payload[0].value} catches</p>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="count"
+                                stroke="hsl(var(--primary))"
+                                strokeWidth={2}
+                                fill="url(#trendGradient)"
+                                fillOpacity={1}
+                                dot={{ fill: "hsl(var(--primary))", strokeWidth: 2, stroke: "hsl(var(--background))", r: 4 }}
+                                activeDot={{ r: 6 }}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
                         </div>
                       )}
                     </CardContent>
@@ -1081,43 +1036,52 @@ const Insights = () => {
                         <p className="text-sm text-muted-foreground">No species data available for this view.</p>
                       ) : (
                         <div className="h-72 w-full">
-                          <ResponsiveBar
-                            data={[...speciesBarData].reverse()}
-                            keys={["catches"]}
-                            indexBy="label"
-                            layout="horizontal"
-                            margin={{ top: 24, right: 16, bottom: 16, left: 160 }}
-                            padding={0.32}
-                            theme={nivoTheme}
-                            colors={[secondaryColor]}
-                            defs={[
-                              {
-                                id: speciesGradientId,
-                                type: "linearGradient",
-                                colors: [
-                                  { offset: 0, color: secondaryColor, opacity: 0.9 },
-                                  { offset: 100, color: secondaryColor, opacity: 0.25 },
-                                ],
-                              },
-                            ]}
-                            fill={[{ match: "*", id: speciesGradientId }]}
-                            axisTop={null}
-                            axisRight={null}
-                            axisBottom={{ tickSize: 0, tickPadding: 8 }}
-                            axisLeft={{ tickSize: 0, tickPadding: 8, tickRotation: 0 }}
-                            enableGridX
-                            enableGridY={false}
-                            gridXValues={5}
-                            borderRadius={6}
-                            enableLabel={false}
-                            tooltip={({ indexValue, value }) => (
-                              <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
-                                <p className="font-medium">{indexValue}</p>
-                                <p>{value} catches</p>
-                              </div>
-                            )}
-                            animate={false}
-                          />
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={[...speciesBarData].reverse()}
+                              layout="horizontal"
+                              margin={{ top: 24, right: 16, bottom: 16, left: 160 }}
+                            >
+                              <defs>
+                                <linearGradient id="speciesGradient" x1="0" y1="0" x2="1" y2="0">
+                                  <stop offset="5%" stopColor="hsl(var(--secondary))" stopOpacity={0.9} />
+                                  <stop offset="95%" stopColor="hsl(var(--secondary))" stopOpacity={0.25} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} horizontal={false} />
+                              <XAxis
+                                type="number"
+                                stroke="hsl(var(--muted-foreground))"
+                                fontSize={12}
+                                tickLine={false}
+                                axisLine={false}
+                                allowDecimals={false}
+                              />
+                              <YAxis
+                                type="category"
+                                dataKey="label"
+                                stroke="hsl(var(--muted-foreground))"
+                                fontSize={12}
+                                tickLine={false}
+                                axisLine={false}
+                                width={150}
+                              />
+                              <Tooltip
+                                content={({ active, payload }) => {
+                                  if (active && payload && payload.length) {
+                                    return (
+                                      <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
+                                        <p className="font-medium">{payload[0].payload.label}</p>
+                                        <p>{payload[0].value} catches</p>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                              />
+                              <Bar dataKey="catches" fill="url(#speciesGradient)" radius={[0, 6, 6, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
                         </div>
                       )}
                     </CardContent>
@@ -1140,42 +1104,45 @@ const Insights = () => {
                         <p className="text-sm text-muted-foreground">Add more catches to see trends.</p>
                       ) : (
                         <div className="h-64 w-full">
-                          <ResponsiveBar
-                            data={timeOfDayData}
-                            keys={["catches"]}
-                            indexBy="label"
-                            margin={{ top: 24, right: 16, bottom: 40, left: 42 }}
-                            padding={0.4}
-                            theme={nivoTheme}
-                            colors={[primaryColor]}
-                            defs={[
-                              {
-                                id: timeGradientId,
-                                type: "linearGradient",
-                                colors: [
-                                  { offset: 0, color: primaryColor, opacity: 0.85 },
-                                  { offset: 100, color: primaryColor, opacity: 0.25 },
-                                ],
-                              },
-                            ]}
-                            fill={[{ match: "*", id: timeGradientId }]}
-                            axisTop={null}
-                            axisRight={null}
-                            axisBottom={{ tickSize: 0, tickPadding: 8, legendOffset: 32 }}
-                            axisLeft={{ tickSize: 0, tickPadding: 8 }}
-                            enableGridX={false}
-                            enableGridY
-                            gridYValues={5}
-                            borderRadius={6}
-                            enableLabel={false}
-                            tooltip={({ indexValue, value }) => (
-                              <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
-                                <p className="font-medium">{indexValue}</p>
-                                <p>{value} catches</p>
-                              </div>
-                            )}
-                            animate={false}
-                          />
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={timeOfDayData} margin={{ top: 24, right: 16, bottom: 40, left: 8 }}>
+                              <defs>
+                                <linearGradient id="timeGradient" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.85} />
+                                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
+                              <XAxis
+                                dataKey="label"
+                                stroke="hsl(var(--muted-foreground))"
+                                fontSize={12}
+                                tickLine={false}
+                                axisLine={false}
+                              />
+                              <YAxis
+                                stroke="hsl(var(--muted-foreground))"
+                                fontSize={12}
+                                tickLine={false}
+                                axisLine={false}
+                                allowDecimals={false}
+                              />
+                              <Tooltip
+                                content={({ active, payload }) => {
+                                  if (active && payload && payload.length) {
+                                    return (
+                                      <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
+                                        <p className="font-medium">{payload[0].payload.label}</p>
+                                        <p>{payload[0].value} catches</p>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                              />
+                              <Bar dataKey="catches" fill="url(#timeGradient)" radius={[6, 6, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
                         </div>
                       )}
                     </CardContent>
@@ -1196,42 +1163,52 @@ const Insights = () => {
                         <p className="text-sm text-muted-foreground">No bait data logged yet.</p>
                       ) : (
                         <div className="h-64 w-full">
-                          <ResponsiveBar
-                            data={[...baitData].reverse()}
-                            keys={["catches"]}
-                            indexBy="label"
-                            layout="horizontal"
-                            margin={{ top: 24, right: 24, bottom: 16, left: 160 }}
-                            padding={0.32}
-                            theme={nivoTheme}
-                            colors={[secondaryColor]}
-                            defs={[
-                              {
-                                id: baitGradientId,
-                                type: "linearGradient",
-                                colors: [
-                                  { offset: 0, color: secondaryColor, opacity: 0.85 },
-                                  { offset: 100, color: secondaryColor, opacity: 0.25 },
-                                ],
-                              },
-                            ]}
-                            fill={[{ match: "*", id: baitGradientId }]}
-                            axisTop={null}
-                            axisRight={null}
-                            axisBottom={{ tickSize: 0, tickPadding: 8 }}
-                            axisLeft={{ tickSize: 0, tickPadding: 8 }}
-                            enableGridX
-                            enableGridY={false}
-                            borderRadius={6}
-                            enableLabel={false}
-                            tooltip={({ indexValue, value }) => (
-                              <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
-                                <p className="font-medium">{indexValue}</p>
-                                <p>{value} catches</p>
-                              </div>
-                            )}
-                            animate={false}
-                          />
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={[...baitData].reverse()}
+                              layout="horizontal"
+                              margin={{ top: 24, right: 24, bottom: 16, left: 160 }}
+                            >
+                              <defs>
+                                <linearGradient id="baitGradient" x1="0" y1="0" x2="1" y2="0">
+                                  <stop offset="5%" stopColor="hsl(var(--secondary))" stopOpacity={0.85} />
+                                  <stop offset="95%" stopColor="hsl(var(--secondary))" stopOpacity={0.25} />
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} horizontal={false} />
+                              <XAxis
+                                type="number"
+                                stroke="hsl(var(--muted-foreground))"
+                                fontSize={12}
+                                tickLine={false}
+                                axisLine={false}
+                                allowDecimals={false}
+                              />
+                              <YAxis
+                                type="category"
+                                dataKey="label"
+                                stroke="hsl(var(--muted-foreground))"
+                                fontSize={12}
+                                tickLine={false}
+                                axisLine={false}
+                                width={150}
+                              />
+                              <Tooltip
+                                content={({ active, payload }) => {
+                                  if (active && payload && payload.length) {
+                                    return (
+                                      <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
+                                        <p className="font-medium">{payload[0].payload.label}</p>
+                                        <p>{payload[0].value} catches</p>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                              />
+                              <Bar dataKey="catches" fill="url(#baitGradient)" radius={[0, 6, 6, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
                         </div>
                       )}
                     </CardContent>
@@ -1253,42 +1230,48 @@ const Insights = () => {
                       <p className="text-sm text-muted-foreground">No method data captured yet.</p>
                     ) : (
                       <div className="h-72 w-full">
-                        <ResponsiveBar
-                          data={methodData}
-                          keys={["catches"]}
-                          indexBy="label"
-                          margin={{ top: 32, right: 24, bottom: 48, left: 48 }}
-                          padding={0.38}
-                          theme={nivoTheme}
-                          colors={[primaryColor]}
-                          defs={[
-                            {
-                              id: methodGradientId,
-                              type: "linearGradient",
-                              colors: [
-                                { offset: 0, color: primaryColor, opacity: 0.9 },
-                                { offset: 100, color: primaryColor, opacity: 0.2 },
-                              ],
-                            },
-                          ]}
-                          fill={[{ match: "*", id: methodGradientId }]}
-                          axisTop={null}
-                          axisRight={null}
-                          axisBottom={{ tickSize: 0, tickPadding: 10, legendOffset: 32, tickRotation: -20 }}
-                          axisLeft={{ tickSize: 0, tickPadding: 8 }}
-                          enableGridX={false}
-                          enableGridY
-                          gridYValues={5}
-                          borderRadius={8}
-                          enableLabel={false}
-                          tooltip={({ indexValue, value }) => (
-                            <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
-                              <p className="font-medium">{indexValue}</p>
-                              <p>{value} catches</p>
-                            </div>
-                          )}
-                          animate={false}
-                        />
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={methodData} margin={{ top: 32, right: 24, bottom: 48, left: 8 }}>
+                            <defs>
+                              <linearGradient id="methodGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.9} />
+                                <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
+                            <XAxis
+                              dataKey="label"
+                              stroke="hsl(var(--muted-foreground))"
+                              fontSize={12}
+                              tickLine={false}
+                              axisLine={false}
+                              angle={-20}
+                              textAnchor="end"
+                              height={60}
+                            />
+                            <YAxis
+                              stroke="hsl(var(--muted-foreground))"
+                              fontSize={12}
+                              tickLine={false}
+                              axisLine={false}
+                              allowDecimals={false}
+                            />
+                            <Tooltip
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  return (
+                                    <div className="rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
+                                      <p className="font-medium">{payload[0].payload.label}</p>
+                                      <p>{payload[0].value} catches</p>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Bar dataKey="catches" fill="url(#methodGradient)" radius={[8, 8, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
                       </div>
                     )}
                   </CardContent>
