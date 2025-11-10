@@ -1,7 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
+import { env } from "./env";
 
-const projectUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
-const publicBase = projectUrl ? `${projectUrl}/storage/v1/object/public/` : "";
+const projectUrl = env.VITE_SUPABASE_URL.replace(/\/$/, "");
+const publicBase = `${projectUrl}/storage/v1/object/public/`;
 
 export const getPublicAssetUrl = (storagePath?: string | null): string | null => {
   if (!storagePath) return null;

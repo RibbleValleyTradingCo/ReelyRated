@@ -1,4 +1,6 @@
-const rawAdminIds = (import.meta.env.VITE_ADMIN_USER_IDS ?? "") as string;
+import { env } from "./env";
+
+const rawAdminIds = env.VITE_ADMIN_USER_IDS || "";
 
 export const ADMIN_USER_IDS = rawAdminIds
   .split(",")
