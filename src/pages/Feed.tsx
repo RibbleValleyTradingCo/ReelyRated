@@ -168,25 +168,50 @@ const Feed = () => {
   }, [fetchCatches, user]);
 
   const filterAndSortCatches = useCallback(() => {
-    let filtered = [...catches];
+    console.log("[Feed] Filtering catches...", {
+      totalCatches: catches.length,
+      feedScope,
+      speciesFilter,
+      followingIds: followingIds.length,
+    });
 
+    let filtered = [...catches];
+    const initialCount = filtered.length;
+
+    // Visibility filter
     filtered = filtered.filter((catchItem) =>
       canViewCatch(catchItem.visibility as VisibilityType | null, catchItem.user_id, user?.id, followingIds)
     );
+    console.log(`[Feed] After visibility filter: ${filtered.length}/${initialCount}`);
 
+    // Session filter
     if (sessionFilter) {
       filtered = filtered.filter((catchItem) => catchItem.session_id === sessionFilter);
+      console.log(`[Feed] After session filter: ${filtered.length}`);
     }
 
+    // Following filter
     if (feedScope === "following") {
       if (followingIds.length === 0) {
+        console.log("[Feed] Following filter: No following IDs, showing empty");
         filtered = [];
       } else {
-        filtered = filtered.filter((catchItem) => followingIds.includes(catchItem.user_id));
+        console.log(`[Feed] Following filter: Checking ${followingIds.length} IDs`);
+        const beforeFollowing = filtered.length;
+        filtered = filtered.filter((catchItem) => {
+          const matches = followingIds.includes(catchItem.user_id);
+          if (!matches) {
+            console.log(`[Feed] Excluding catch from user ${catchItem.user_id} (not in following list)`);
+          }
+          return matches;
+        });
+        console.log(`[Feed] After following filter: ${filtered.length}/${beforeFollowing}`);
       }
     }
 
+    // Species filter
     if (speciesFilter !== "all") {
+      const beforeSpecies = filtered.length;
       filtered = filtered.filter((catchItem) => {
         if (speciesFilter === "other") {
           if (catchItem.species !== "other") {
@@ -198,10 +223,16 @@ const Feed = () => {
           const customValue = (extractCustomSpecies(catchItem.conditions) ?? "").toLowerCase();
           return customValue.startsWith(customSpeciesFilter.toLowerCase());
         }
-        return catchItem.species === speciesFilter;
+        const matches = catchItem.species === speciesFilter;
+        if (!matches) {
+          console.log(`[Feed] Excluding catch with species ${catchItem.species} (looking for ${speciesFilter})`);
+        }
+        return matches;
       });
+      console.log(`[Feed] After species filter (${speciesFilter}): ${filtered.length}/${beforeSpecies}`);
     }
 
+    // Sorting
     if (sortBy === "newest") {
       filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     } else if (sortBy === "highest_rated") {
@@ -214,6 +245,7 @@ const Feed = () => {
       filtered.sort((a, b) => (b.weight || 0) - (a.weight || 0));
     }
 
+    console.log(`[Feed] Final filtered count: ${filtered.length}`);
     setFilteredCatches(filtered);
   }, [catches, feedScope, followingIds, speciesFilter, customSpeciesFilter, sortBy, user?.id, sessionFilter]);
 

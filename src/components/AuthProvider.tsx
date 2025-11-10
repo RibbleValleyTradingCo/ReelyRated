@@ -17,14 +17,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(nextSession?.user ?? null);
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      syncSession(session);
+    const clearStaleSession = () => {
+      console.warn("[Auth] Clearing stale session data");
+      localStorage.removeItem("supabase.auth.token");
+      sessionStorage.clear();
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("sb-")) {
+          localStorage.removeItem(key);
+        }
+      });
+    };
+
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error("[Auth] Error getting session:", error);
+        // If there's an error getting the session, clear potentially stale data
+        clearStaleSession();
+        syncSession(null);
+      } else {
+        syncSession(session);
+      }
       setLoading(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      console.log("[Auth] Auth state changed:", event);
+
+      // If we get a SIGNED_OUT event but still have session data, clear it
+      if (event === "SIGNED_OUT" && !nextSession) {
+        clearStaleSession();
+      }
+
       syncSession(nextSession);
     });
 

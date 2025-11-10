@@ -71,6 +71,26 @@ export const Navbar = () => {
       const { error } = await supabase.auth.signOut();
 
       if (error) {
+        // Check if it's a "session missing" error - this means stale session
+        if (error.message?.includes("Auth session missing") || error.name === "AuthSessionMissingError") {
+          console.warn("[SignOut] Stale session detected - clearing local storage and forcing sign out");
+
+          // Clear all Supabase auth storage
+          localStorage.removeItem("supabase.auth.token");
+          sessionStorage.clear();
+
+          // Clear any keys that start with "sb-"
+          Object.keys(localStorage).forEach((key) => {
+            if (key.startsWith("sb-")) {
+              localStorage.removeItem(key);
+            }
+          });
+
+          toast.success("Signed out successfully");
+          window.location.href = "/auth"; // Hard redirect to clear all state
+          return;
+        }
+
         console.error("[SignOut] Supabase signOut failed:", {
           message: error.message,
           status: error.status,
