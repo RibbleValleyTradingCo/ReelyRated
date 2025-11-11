@@ -66,9 +66,13 @@ const AdminAuditLog = () => {
   const [isExporting, setIsExporting] = useState(false);
 
   const fetchAuditLog = useCallback(async () => {
-    if (!user || !isAdmin) return;
+    if (!user || !isAdmin) {
+      console.log('[AdminAuditLog] Skipping fetch - user or admin check failed', { user: !!user, isAdmin });
+      return;
+    }
     setIsLoading(true);
 
+    console.log('[AdminAuditLog] Fetching moderation log...');
     const { data, error } = await supabase
       .from("moderation_log")
       .select("id, action, target_type, target_id, reason, details, created_at, admin:admin_id (id, username)")
@@ -76,11 +80,13 @@ const AdminAuditLog = () => {
       .limit(500);
 
     if (error) {
-      toast.error("Unable to load moderation log");
+      console.error('[AdminAuditLog] Error fetching log:', error);
+      toast.error(`Unable to load moderation log: ${error.message}`);
       setIsLoading(false);
       return;
     }
 
+    console.log('[AdminAuditLog] Fetched rows:', data?.length ?? 0);
     const rows = (data ?? []) as LogRow[];
     setLogRows(rows);
     setIsLoading(false);
@@ -304,9 +310,26 @@ const AdminAuditLog = () => {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading moderation log…</p>
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center space-y-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
+                  <p className="text-sm text-muted-foreground">Loading moderation log…</p>
+                </div>
+              </div>
+            ) : logRows.length === 0 ? (
+              <div className="text-center py-8 space-y-2">
+                <p className="text-sm font-medium text-foreground">No moderation actions yet</p>
+                <p className="text-xs text-muted-foreground">
+                  Moderation actions (warnings, deletions, etc.) will appear here once created.
+                </p>
+              </div>
             ) : filteredRows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No moderation actions matched your filters.</p>
+              <div className="text-center py-8 space-y-2">
+                <p className="text-sm font-medium text-foreground">No actions match your filters</p>
+                <p className="text-xs text-muted-foreground">
+                  Try adjusting your search term or action filter.
+                </p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>

@@ -153,11 +153,15 @@ const AdminReports = () => {
 
   const fetchReports = useCallback(
     async (options: { silently?: boolean } = {}) => {
-      if (!user || !isAdmin) return;
+      if (!user || !isAdmin) {
+        console.log('[AdminReports] Skipping fetch - user or admin check failed', { user: !!user, isAdmin });
+        return;
+      }
       if (!options.silently) {
         setIsLoading(true);
       }
 
+      console.log('[AdminReports] Fetching reports...');
       const { data, error } = await supabase
         .from("reports")
         .select(
@@ -166,8 +170,10 @@ const AdminReports = () => {
         .order("created_at", { ascending: false });
 
       if (error) {
-        toast.error("Unable to load reports");
+        console.error('[AdminReports] Error fetching reports:', error);
+        toast.error(`Unable to load reports: ${error.message}`);
       } else if (data) {
+        console.log('[AdminReports] Fetched reports:', data.length);
         setReports(data as unknown as ReportRow[]);
       }
 
@@ -669,9 +675,26 @@ const AdminReports = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading reports…</p>
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center space-y-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
+                  <p className="text-sm text-muted-foreground">Loading reports…</p>
+                </div>
+              </div>
+            ) : reports.length === 0 ? (
+              <div className="text-center py-8 space-y-2">
+                <p className="text-sm font-medium text-foreground">No reports submitted yet</p>
+                <p className="text-xs text-muted-foreground">
+                  User-submitted reports will appear here when content is flagged.
+                </p>
+              </div>
             ) : filteredReports.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No reports yet.</p>
+              <div className="text-center py-8 space-y-2">
+                <p className="text-sm font-medium text-foreground">No reports match your filter</p>
+                <p className="text-xs text-muted-foreground">
+                  Try selecting "All" or a different content type.
+                </p>
+              </div>
             ) : (
               filteredReports.map((report) => {
                 const isSelected = selectedReport?.id === report.id;
