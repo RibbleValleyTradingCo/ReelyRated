@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/components/AuthProvider";
-import { isAdminUser } from "@/lib/admin";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { getProfilePath } from "@/lib/profile";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,8 +54,9 @@ const actionOptions = [{ label: "All actions", value: "all" as const }].concat(
 );
 
 const AdminAuditLog = () => {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const { isAdmin, loading: adminLoading } = useAdminAuth();
 
   const [logRows, setLogRows] = useState<LogRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,15 +65,22 @@ const AdminAuditLog = () => {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [isExporting, setIsExporting] = useState(false);
 
-  useEffect(() => {
-    if (!loading && !isAdminUser(user?.id)) {
-      toast.error("Admin access required");
-      navigate("/feed");
-    }
-  }, [loading, user, navigate]);
+  // Show loading spinner while checking admin status
+  if (adminLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  // Redirect handled by useAdminAuth hook
+  if (!isAdmin) {
+    return null;
+  }
 
   const fetchAuditLog = useCallback(async () => {
-    if (!user || !isAdminUser(user.id)) return;
+    if (!user || !isAdmin) return;
     setIsLoading(true);
 
     const { data, error } = await supabase
@@ -90,16 +98,16 @@ const AdminAuditLog = () => {
     const rows = (data ?? []) as LogRow[];
     setLogRows(rows);
     setIsLoading(false);
-  }, [user]);
+  }, [user, isAdmin]);
 
   useEffect(() => {
-    if (isAdminUser(user?.id)) {
+    if (isAdmin) {
       void fetchAuditLog();
     }
-  }, [fetchAuditLog, user]);
+  }, [fetchAuditLog, isAdmin]);
 
   useEffect(() => {
-    if (!isAdminUser(user?.id)) return;
+    if (!isAdmin) return;
 
     const channel = supabase
       .channel("moderation-log-feed")
@@ -119,7 +127,7 @@ const AdminAuditLog = () => {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [fetchAuditLog, user]);
+  }, [fetchAuditLog, isAdmin]);
 
   const filteredRows = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
