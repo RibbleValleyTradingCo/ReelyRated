@@ -14,6 +14,7 @@ import { canViewCatch, shouldShowExactLocation } from "@/lib/visibility";
 import type { Database } from "@/integrations/supabase/types";
 import { resolveAvatarUrl } from "@/lib/storage";
 import { useFeedInfinite, type FeedCatch } from "@/hooks/useFeedInfinite";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 const capitalizeFirstWord = (value: string) => {
   if (!value) return "";
@@ -34,6 +35,9 @@ const Feed = () => {
   const [feedScope, setFeedScope] = useState<"all" | "following">("all");
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const sessionFilter = searchParams.get("session");
+
+  // Debounce custom species input to prevent query on every keystroke
+  const debouncedCustomSpecies = useDebouncedValue(customSpeciesFilter, 500);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -80,7 +84,7 @@ const Feed = () => {
     followingIds,
     sortBy: sortBy as "newest" | "highest_rated" | "heaviest",
     sessionId: sessionFilter,
-    customSpecies: customSpeciesFilter,
+    customSpecies: debouncedCustomSpecies, // Use debounced value for query
     userId: user?.id,
   });
 
@@ -104,7 +108,7 @@ const Feed = () => {
     if (speciesFilter !== "other" && customSpeciesFilter) {
       setCustomSpeciesFilter("");
     }
-  }, [speciesFilter, customSpeciesFilter]);
+  }, [speciesFilter]); // Removed customSpeciesFilter from deps to avoid unnecessary clears
 
   const calculateAverageRating = (ratings: { rating: number }[]) => {
     if (ratings.length === 0) return "0";
