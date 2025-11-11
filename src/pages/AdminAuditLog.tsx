@@ -150,20 +150,6 @@ const AdminAuditLog = () => {
     setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
   };
 
-  // Show loading spinner while checking admin status
-  if (adminLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
-  }
-
-  // Redirect handled by useAdminAuth hook
-  if (!isAdmin) {
-    return null;
-  }
-
   const handleExportCsv = async () => {
     if (filteredRows.length === 0) {
       toast.error("No rows to export");
@@ -243,6 +229,20 @@ const AdminAuditLog = () => {
     },
     [navigate]
   );
+
+  // Show loading spinner while checking admin status
+  if (adminLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  // Redirect handled by useAdminAuth hook
+  if (!isAdmin) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted">
