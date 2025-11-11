@@ -35,7 +35,8 @@ export const useFollowingIds = (userId: string | null | undefined) => {
     },
     enabled: Boolean(userId),
     staleTime: 60_000,
-    initialData: [],
+    // Use placeholderData instead of initialData - placeholderData doesn't prevent fetching
+    placeholderData: [],
   });
 
   console.log("[useFollowingIds] Hook returning:", {
