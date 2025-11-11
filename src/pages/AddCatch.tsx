@@ -17,6 +17,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { UK_FISHERIES, UK_FRESHWATER_SPECIES, normalizeVenueName } from "@/lib/freshwater-data";
+import { validateCoordinates } from "@/lib/geo-validation";
 import type { Database } from "@/integrations/supabase/types";
 
 const capitalizeFirstWord = (value: string) => {
@@ -361,10 +362,18 @@ const AddCatch = () => {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setGpsCoordinates({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
+        const validation = validateCoordinates(
+          position.coords.latitude,
+          position.coords.longitude
+        );
+
+        if (!validation.valid) {
+          setLocationError(validation.error || 'Invalid coordinates');
+          setIsLocating(false);
+          return;
+        }
+
+        setGpsCoordinates(validation.sanitized!);
         setGpsAccuracy(position.coords.accuracy ?? null);
         setUseGpsLocation(true);
         setIsLocating(false);
@@ -922,6 +931,8 @@ const AddCatch = () => {
                           height="250"
                           loading="lazy"
                           allowFullScreen
+                          sandbox="allow-scripts allow-same-origin allow-popups"
+                          referrerPolicy="no-referrer"
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">

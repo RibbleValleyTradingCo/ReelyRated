@@ -883,6 +883,8 @@ const CatchDetail = () => {
                         height="220"
                         loading="lazy"
                         allowFullScreen
+                        sandbox="allow-scripts allow-same-origin allow-popups"
+                        referrerPolicy="no-referrer"
                       />
                     </div>
                     <p className="text-xs text-muted-foreground">
