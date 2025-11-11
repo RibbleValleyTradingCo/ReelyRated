@@ -59,7 +59,7 @@ const parseConditions = (conditions: unknown) => {
 };
 
 const LeaderboardPage = () => {
-  const { entries, loading, error } = useLeaderboardRealtime(null, 100);
+  const { entries, loading, error, hasMore, isLoadingMore, loadMore } = useLeaderboardRealtime(null, 50);
 
   const rows = useMemo(() => {
     return entries.map((entry, index) => {
@@ -190,6 +190,18 @@ const LeaderboardPage = () => {
             ) : (
               <p className="leaderboard-scroll-hint">Swipe or scroll sideways to see every stat →</p>
             )}
+          </div>
+        )}
+
+        {!loading && rows.length > 0 && hasMore && (
+          <div className="text-center">
+            <button
+              onClick={loadMore}
+              disabled={isLoadingMore}
+              className="rounded-lg border border-slate-300 bg-white px-6 py-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isLoadingMore ? "Loading..." : "Load More"}
+            </button>
           </div>
         )}
       </main>

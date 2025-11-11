@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/components/AuthProvider";
-import { isAdminUser } from "@/lib/admin";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { getProfilePath } from "@/lib/profile";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -131,8 +131,9 @@ const formatRelative = (value: string | null | undefined) => {
 };
 
 const AdminReports = () => {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const { isAdmin, loading: adminLoading } = useAdminAuth();
 
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -150,20 +151,17 @@ const AdminReports = () => {
   const [warnDuration, setWarnDuration] = useState("24");
   const [isProcessingAction, setIsProcessingAction] = useState(false);
 
-  useEffect(() => {
-    if (!loading && !isAdminUser(user?.id)) {
-      toast.error("Admin access required");
-      navigate("/feed");
-    }
-  }, [loading, user, navigate]);
-
   const fetchReports = useCallback(
     async (options: { silently?: boolean } = {}) => {
-      if (!user || !isAdminUser(user.id)) return;
+      if (!user || !isAdmin) {
+        console.log('[AdminReports] Skipping fetch - user or admin check failed', { user: !!user, isAdmin });
+        return;
+      }
       if (!options.silently) {
         setIsLoading(true);
       }
 
+      console.log('[AdminReports] Fetching reports...');
       const { data, error } = await supabase
         .from("reports")
         .select(
@@ -172,24 +170,26 @@ const AdminReports = () => {
         .order("created_at", { ascending: false });
 
       if (error) {
-        toast.error("Unable to load reports");
+        console.error('[AdminReports] Error fetching reports:', error);
+        toast.error(`Unable to load reports: ${error.message}`);
       } else if (data) {
+        console.log('[AdminReports] Fetched reports:', data.length);
         setReports(data as unknown as ReportRow[]);
       }
 
       setIsLoading(false);
     },
-    [user]
+    [user, isAdmin]
   );
 
   useEffect(() => {
-    if (isAdminUser(user?.id)) {
+    if (isAdmin) {
       void fetchReports();
     }
-  }, [fetchReports, user]);
+  }, [fetchReports, isAdmin]);
 
   useEffect(() => {
-    if (!isAdminUser(user?.id)) return;
+    if (!isAdmin) return;
 
     const channel = supabase
       .channel("admin-reports-feed")
@@ -255,7 +255,7 @@ const AdminReports = () => {
 
   const fetchReportDetails = useCallback(
     async (report: ReportRow): Promise<ReportDetails> => {
-      if (!user || !isAdminUser(user.id)) {
+      if (!user || !isAdmin) {
         throw new Error("Admin privileges required");
       }
 
@@ -387,7 +387,7 @@ const AdminReports = () => {
         targetMissing,
       };
     },
-    [user]
+    [user, isAdmin]
   );
 
   const handleSelectReport = useCallback(
@@ -400,7 +400,7 @@ const AdminReports = () => {
       setShowDeleteConfirm(false);
       setShowWarnDialog(false);
 
-      if (!isAdminUser(user?.id)) return;
+      if (!isAdmin) return;
 
       setDetailsLoading(true);
       try {
@@ -413,12 +413,12 @@ const AdminReports = () => {
         setDetailsLoading(false);
       }
     },
-    [fetchReportDetails, user]
+    [fetchReportDetails, isAdmin]
   );
 
   const handleUpdateStatus = useCallback(
     async (reportId: string, status: ReportStatus) => {
-      if (!user || !isAdminUser(user.id)) return;
+      if (!user || !isAdmin) return;
       setUpdatingId(reportId);
 
       const { error } = await supabase
@@ -438,7 +438,7 @@ const AdminReports = () => {
 
       setUpdatingId(null);
     },
-    [user]
+    [user, isAdmin]
   );
 
   const handleViewTarget = useCallback(
@@ -622,6 +622,20 @@ const AdminReports = () => {
     setWarnDuration("24");
   };
 
+  // Show loading spinner while checking admin status
+  if (adminLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  // Redirect handled by useAdminAuth hook
+  if (!isAdmin) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted">
       <Navbar />
@@ -661,9 +675,26 @@ const AdminReports = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading reports…</p>
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center space-y-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
+                  <p className="text-sm text-muted-foreground">Loading reports…</p>
+                </div>
+              </div>
+            ) : reports.length === 0 ? (
+              <div className="text-center py-8 space-y-2">
+                <p className="text-sm font-medium text-foreground">No reports submitted yet</p>
+                <p className="text-xs text-muted-foreground">
+                  User-submitted reports will appear here when content is flagged.
+                </p>
+              </div>
             ) : filteredReports.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No reports yet.</p>
+              <div className="text-center py-8 space-y-2">
+                <p className="text-sm font-medium text-foreground">No reports match your filter</p>
+                <p className="text-xs text-muted-foreground">
+                  Try selecting "All" or a different content type.
+                </p>
+              </div>
             ) : (
               filteredReports.map((report) => {
                 const isSelected = selectedReport?.id === report.id;

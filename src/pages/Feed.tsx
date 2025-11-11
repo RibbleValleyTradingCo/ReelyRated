@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
@@ -9,12 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Star, MessageCircle, Fish, Heart } from "lucide-react";
-import { toast } from "sonner";
 import { UK_FRESHWATER_SPECIES, getFreshwaterSpeciesLabel } from "@/lib/freshwater-data";
 import { canViewCatch, shouldShowExactLocation } from "@/lib/visibility";
-import { useSearchParams } from "react-router-dom";
 import type { Database } from "@/integrations/supabase/types";
 import { resolveAvatarUrl } from "@/lib/storage";
+import { useFeedInfinite, type FeedCatch } from "@/hooks/useFeedInfinite";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 const capitalizeFirstWord = (value: string) => {
   if (!value) return "";
@@ -23,55 +23,12 @@ const capitalizeFirstWord = (value: string) => {
   return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
 };
 
-type CustomFields = {
-  species?: string;
-  method?: string;
-};
-
-type CatchConditions = {
-  customFields?: CustomFields;
-  gps?: {
-    lat: number;
-    lng: number;
-    accuracy?: number;
-    label?: string;
-  };
-  [key: string]: unknown;
-} | null;
-
 type VisibilityType = Database["public"]["Enums"]["visibility_type"];
 
-interface Catch {
-  id: string;
-  title: string;
-  image_url: string;
-  user_id: string;
-  location: string;
-  species: string | null;
-  weight: number | null;
-  weight_unit: string | null;
-  created_at: string;
-  visibility: string | null;
-  hide_exact_spot: boolean | null;
-  session_id: string | null;
-  profiles: {
-    username: string;
-    avatar_path: string | null;
-    avatar_url: string | null;
-  };
-  ratings: { rating: number }[];
-  comments: { id: string }[];
-  reactions: { user_id: string }[] | null;
-  conditions: CatchConditions;
-}
-
 const Feed = () => {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [catches, setCatches] = useState<Catch[]>([]);
-  const [filteredCatches, setFilteredCatches] = useState<Catch[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [speciesFilter, setSpeciesFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("newest");
   const [customSpeciesFilter, setCustomSpeciesFilter] = useState("");
@@ -79,40 +36,14 @@ const Feed = () => {
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const sessionFilter = searchParams.get("session");
 
+  // Debounce custom species input to prevent query on every keystroke
+  const debouncedCustomSpecies = useDebouncedValue(customSpeciesFilter, 500);
+
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       navigate("/auth");
     }
-  }, [user, loading, navigate]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const loadCatches = async () => {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from("catches")
-        .select(`
-          *,
-          profiles:user_id (username, avatar_path, avatar_url),
-          ratings (rating),
-          comments:catch_comments (id),
-          reactions:catch_reactions (user_id)
-        `)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        toast.error("Failed to load catches");
-        console.error(error);
-        setCatches([]);
-      } else {
-        setCatches((data as Catch[]) || []);
-      }
-      setIsLoading(false);
-    };
-
-    void loadCatches();
-  }, [user]);
+  }, [user, authLoading, navigate]);
 
   useEffect(() => {
     if (!user) {
@@ -139,65 +70,45 @@ const Feed = () => {
     void loadFollowing();
   }, [user]);
 
-  const filterAndSortCatches = useCallback(() => {
-    let filtered = [...catches];
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+    error,
+  } = useFeedInfinite({
+    species: speciesFilter,
+    feedScope,
+    followingIds,
+    sortBy: sortBy as "newest" | "highest_rated" | "heaviest",
+    sessionId: sessionFilter,
+    customSpecies: debouncedCustomSpecies, // Use debounced value for query
+    userId: user?.id,
+  });
 
-    filtered = filtered.filter((catchItem) =>
-      canViewCatch(catchItem.visibility as VisibilityType | null, catchItem.user_id, user?.id, followingIds)
+  const allCatches = useMemo(() => {
+    return data?.pages.flatMap((page) => page.data) ?? [];
+  }, [data]);
+
+  // Client-side visibility filtering (requires auth context)
+  const filteredCatches = useMemo(() => {
+    return allCatches.filter((catchItem) =>
+      canViewCatch(
+        catchItem.visibility as VisibilityType | null,
+        catchItem.user_id,
+        user?.id,
+        followingIds
+      )
     );
-
-    if (sessionFilter) {
-      filtered = filtered.filter((catchItem) => catchItem.session_id === sessionFilter);
-    }
-
-    if (feedScope === "following") {
-      if (followingIds.length === 0) {
-        filtered = [];
-      } else {
-        filtered = filtered.filter((catchItem) => followingIds.includes(catchItem.user_id));
-      }
-    }
-
-    if (speciesFilter !== "all") {
-      filtered = filtered.filter((catchItem) => {
-        if (speciesFilter === "other") {
-          if (catchItem.species !== "other") {
-            return false;
-          }
-          if (!customSpeciesFilter) {
-            return true;
-          }
-          const customValue = (catchItem.conditions?.customFields?.species ?? "").toLowerCase();
-          return customValue.startsWith(customSpeciesFilter.toLowerCase());
-        }
-        return catchItem.species === speciesFilter;
-      });
-    }
-
-    if (sortBy === "newest") {
-      filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } else if (sortBy === "highest_rated") {
-      filtered.sort((a, b) => {
-        const avgA = calculateAverageRating(a.ratings);
-        const avgB = calculateAverageRating(b.ratings);
-        return parseFloat(avgB) - parseFloat(avgA);
-      });
-    } else if (sortBy === "heaviest") {
-      filtered.sort((a, b) => (b.weight || 0) - (a.weight || 0));
-    }
-
-    setFilteredCatches(filtered);
-  }, [catches, feedScope, followingIds, speciesFilter, customSpeciesFilter, sortBy, user?.id, sessionFilter]);
-
-  useEffect(() => {
-    filterAndSortCatches();
-  }, [filterAndSortCatches]);
+  }, [allCatches, user?.id, followingIds]);
 
   useEffect(() => {
     if (speciesFilter !== "other" && customSpeciesFilter) {
       setCustomSpeciesFilter("");
     }
-  }, [speciesFilter, customSpeciesFilter]);
+  }, [speciesFilter]); // Removed customSpeciesFilter from deps to avoid unnecessary clears
 
   const calculateAverageRating = (ratings: { rating: number }[]) => {
     if (ratings.length === 0) return "0";
@@ -205,7 +116,7 @@ const Feed = () => {
     return (sum / ratings.length).toFixed(1);
   };
 
-  const formatSpecies = (catchItem: Catch) => {
+  const formatSpecies = (catchItem: FeedCatch) => {
     if (!catchItem.species) return "";
     if (catchItem.species === "other") {
       const customSpecies = catchItem.conditions?.customFields?.species;
@@ -222,11 +133,39 @@ const Feed = () => {
     return `${weight}${unit === 'kg' ? 'kg' : 'lb'}`;
   };
 
-  if (loading || isLoading) {
+  if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-muted">
         <Navbar />
-        <div className="container mx-auto px-4 py-8">Loading...</div>
+        <div className="container mx-auto px-4 py-8 flex justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            <p className="text-sm text-muted-foreground">Loading catches...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center">
+            <p className="text-sm font-medium text-destructive">
+              {error?.message || "Failed to load catches"}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -236,7 +175,7 @@ const Feed = () => {
       <Navbar />
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-4xl font-bold mb-8 text-center">Community Catches</h1>
-        
+
         {/* Filters */}
         <div className="flex flex-wrap gap-4 mb-8 justify-center">
           <Select
@@ -301,6 +240,8 @@ const Feed = () => {
                   src={catchItem.image_url}
                   alt={catchItem.title}
                   className="w-full h-64 object-cover rounded-t-lg"
+                  loading="lazy"
+                  decoding="async"
                 />
                 {catchItem.species && catchItem.weight && (
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-white">
@@ -370,7 +311,7 @@ const Feed = () => {
         {filteredCatches.length === 0 && (
           <div className="text-center py-12">
             <p className="text-muted-foreground mb-4">
-              {catches.length === 0
+              {allCatches.length === 0
                 ? "No catches yet. Be the first to share!"
                 : sessionFilter
                   ? "No catches logged for this session yet."
@@ -381,6 +322,26 @@ const Feed = () => {
             <Button variant="ocean" onClick={() => navigate("/add-catch")}>
               Log Your First Catch
             </Button>
+          </div>
+        )}
+        {hasNextPage && filteredCatches.length > 0 && (
+          <div className="text-center py-8">
+            <Button
+              variant="outline"
+              onClick={() => void fetchNextPage()}
+              disabled={isFetchingNextPage}
+              aria-label={isFetchingNextPage ? "Loading more catches" : "Load more catches"}
+              aria-live="polite"
+            >
+              {isFetchingNextPage ? "Loading..." : "Load More"}
+            </Button>
+          </div>
+        )}
+        {!hasNextPage && filteredCatches.length > 0 && (
+          <div className="text-center py-8">
+            <p className="text-sm text-muted-foreground" role="status">
+              You've reached the end
+            </p>
           </div>
         )}
       </div>

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Menu, Search as SearchIcon, X } from "lucide-react";
 import { toast } from "sonner";
 import { NotificationsBell } from "@/components/NotificationsBell";
-import { isAdminUser } from "@/lib/admin";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import LogoMark from "@/components/LogoMark";
 import { MobileMenu, MOBILE_MENU_ID } from "@/components/MobileMenu";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ export const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileUsername, setProfileUsername] = useState<string | null>(null);
   const isOnSearchRoute = location.pathname.startsWith("/search");
+  const isAdmin = useIsAdmin(user?.id);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -182,7 +183,7 @@ export const Navbar = () => {
           user={{
             id: user.id,
             username: profileUsername ?? user.user_metadata?.username ?? null,
-            isAdmin: isAdminUser(user.id),
+            isAdmin: isAdmin,
           }}
           onSignOut={handleSignOut}
         />

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 
 import { Navbar } from "@/components/Navbar";
 import { useAuth } from "@/components/AuthProvider";
-import { isAdminUser } from "@/lib/admin";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { getProfilePath } from "@/lib/profile";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,8 +54,9 @@ const actionOptions = [{ label: "All actions", value: "all" as const }].concat(
 );
 
 const AdminAuditLog = () => {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const { isAdmin, loading: adminLoading } = useAdminAuth();
 
   const [logRows, setLogRows] = useState<LogRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,17 +65,14 @@ const AdminAuditLog = () => {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [isExporting, setIsExporting] = useState(false);
 
-  useEffect(() => {
-    if (!loading && !isAdminUser(user?.id)) {
-      toast.error("Admin access required");
-      navigate("/feed");
-    }
-  }, [loading, user, navigate]);
-
   const fetchAuditLog = useCallback(async () => {
-    if (!user || !isAdminUser(user.id)) return;
+    if (!user || !isAdmin) {
+      console.log('[AdminAuditLog] Skipping fetch - user or admin check failed', { user: !!user, isAdmin });
+      return;
+    }
     setIsLoading(true);
 
+    console.log('[AdminAuditLog] Fetching moderation log...');
     const { data, error } = await supabase
       .from("moderation_log")
       .select("id, action, target_type, target_id, reason, details, created_at, admin:admin_id (id, username)")
@@ -82,24 +80,26 @@ const AdminAuditLog = () => {
       .limit(500);
 
     if (error) {
-      toast.error("Unable to load moderation log");
+      console.error('[AdminAuditLog] Error fetching log:', error);
+      toast.error(`Unable to load moderation log: ${error.message}`);
       setIsLoading(false);
       return;
     }
 
+    console.log('[AdminAuditLog] Fetched rows:', data?.length ?? 0);
     const rows = (data ?? []) as LogRow[];
     setLogRows(rows);
     setIsLoading(false);
-  }, [user]);
+  }, [user, isAdmin]);
 
   useEffect(() => {
-    if (isAdminUser(user?.id)) {
+    if (isAdmin) {
       void fetchAuditLog();
     }
-  }, [fetchAuditLog, user]);
+  }, [fetchAuditLog, isAdmin]);
 
   useEffect(() => {
-    if (!isAdminUser(user?.id)) return;
+    if (!isAdmin) return;
 
     const channel = supabase
       .channel("moderation-log-feed")
@@ -119,7 +119,7 @@ const AdminAuditLog = () => {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [fetchAuditLog, user]);
+  }, [fetchAuditLog, isAdmin]);
 
   const filteredRows = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -230,6 +230,20 @@ const AdminAuditLog = () => {
     [navigate]
   );
 
+  // Show loading spinner while checking admin status
+  if (adminLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  // Redirect handled by useAdminAuth hook
+  if (!isAdmin) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted">
       <Navbar />
@@ -296,9 +310,26 @@ const AdminAuditLog = () => {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading moderation log…</p>
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center space-y-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
+                  <p className="text-sm text-muted-foreground">Loading moderation log…</p>
+                </div>
+              </div>
+            ) : logRows.length === 0 ? (
+              <div className="text-center py-8 space-y-2">
+                <p className="text-sm font-medium text-foreground">No moderation actions yet</p>
+                <p className="text-xs text-muted-foreground">
+                  Moderation actions (warnings, deletions, etc.) will appear here once created.
+                </p>
+              </div>
             ) : filteredRows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No moderation actions matched your filters.</p>
+              <div className="text-center py-8 space-y-2">
+                <p className="text-sm font-medium text-foreground">No actions match your filters</p>
+                <p className="text-xs text-muted-foreground">
+                  Try adjusting your search term or action filter.
+                </p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>

@@ -758,6 +758,8 @@ const CatchDetail = () => {
                         src={photo}
                         alt={`Gallery ${index + 1}`}
                         className="w-full h-40 object-cover rounded-lg cursor-pointer hover:opacity-80 transition"
+                        loading="lazy"
+                        decoding="async"
                       />
                     ))}
                   </div>
@@ -883,6 +885,8 @@ const CatchDetail = () => {
                         height="220"
                         loading="lazy"
                         allowFullScreen
+                        sandbox="allow-scripts allow-same-origin allow-popups"
+                        referrerPolicy="no-referrer"
                       />
                     </div>
                     <p className="text-xs text-muted-foreground">
