@@ -465,7 +465,7 @@ const Feed = () => {
           </div>
         )}
 
-        {filteredCatches.length === 0 && catches.length > 0 && (
+        {filteredCatches.length === 0 && catches.length > 0 && !isLoading && (
           <div className="text-center py-12">
             <p className="text-muted-foreground mb-4">
               {sessionFilter
