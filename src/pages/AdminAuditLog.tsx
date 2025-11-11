@@ -65,20 +65,6 @@ const AdminAuditLog = () => {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [isExporting, setIsExporting] = useState(false);
 
-  // Show loading spinner while checking admin status
-  if (adminLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
-  }
-
-  // Redirect handled by useAdminAuth hook
-  if (!isAdmin) {
-    return null;
-  }
-
   const fetchAuditLog = useCallback(async () => {
     if (!user || !isAdmin) return;
     setIsLoading(true);
@@ -157,6 +143,20 @@ const AdminAuditLog = () => {
   const handleToggleSort = () => {
     setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
   };
+
+  // Show loading spinner while checking admin status
+  if (adminLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  // Redirect handled by useAdminAuth hook
+  if (!isAdmin) {
+    return null;
+  }
 
   const handleExportCsv = async () => {
     if (filteredRows.length === 0) {

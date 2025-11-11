@@ -151,20 +151,6 @@ const AdminReports = () => {
   const [warnDuration, setWarnDuration] = useState("24");
   const [isProcessingAction, setIsProcessingAction] = useState(false);
 
-  // Show loading spinner while checking admin status
-  if (adminLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
-  }
-
-  // Redirect handled by useAdminAuth hook
-  if (!isAdmin) {
-    return null;
-  }
-
   const fetchReports = useCallback(
     async (options: { silently?: boolean } = {}) => {
       if (!user || !isAdmin) return;
@@ -629,6 +615,20 @@ const AdminReports = () => {
     setWarnSeverity("warning");
     setWarnDuration("24");
   };
+
+  // Show loading spinner while checking admin status
+  if (adminLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
+  // Redirect handled by useAdminAuth hook
+  if (!isAdmin) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted">
