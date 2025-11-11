@@ -46,11 +46,14 @@ const normalizeEntries = (entries: LeaderboardEntry[] | null | undefined) =>
 
 export function useLeaderboardRealtime(
   selectedSpecies: string | null = null,
-  limit = 50,
+  pageSize = 50,
 ) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const offsetRef = useRef(0);
 
   const speciesFilter = useMemo(
     () => (selectedSpecies ? selectedSpecies : null),
@@ -60,9 +63,15 @@ export function useLeaderboardRealtime(
   const fetchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchLeaderboard = useCallback(
-    async (isBackground = false) => {
-      if (!isBackground) {
+    async (reset = false, isBackground = false) => {
+      const currentOffset = reset ? 0 : offsetRef.current;
+
+      if (reset) {
         setLoading(true);
+        offsetRef.current = 0;
+        setHasMore(true);
+      } else if (!isBackground) {
+        setIsLoadingMore(true);
       }
 
       try {
@@ -74,7 +83,7 @@ export function useLeaderboardRealtime(
           .order("total_score", { ascending: false })
           .order("created_at", { ascending: true })
           .order("id", { ascending: true })
-          .limit(limit);
+          .range(currentOffset, currentOffset + pageSize - 1);
 
         if (speciesFilter) {
           query = query.eq("species", speciesFilter);
@@ -88,22 +97,39 @@ export function useLeaderboardRealtime(
           return;
         }
 
-        setEntries(normalizeEntries(data));
+        const normalized = normalizeEntries(data);
+
+        if (reset || isBackground) {
+          setEntries(normalized);
+        } else {
+          setEntries(prev => [...prev, ...normalized]);
+        }
+
+        setHasMore(normalized.length === pageSize);
+        offsetRef.current = reset ? normalized.length : currentOffset + normalized.length;
         setError(null);
       } catch (err) {
         console.error("Leaderboard fetch error:", err);
         setError("Failed to fetch leaderboard");
       } finally {
-        if (!isBackground) {
+        if (reset) {
           setLoading(false);
+        } else if (!isBackground) {
+          setIsLoadingMore(false);
         }
       }
     },
-    [speciesFilter, limit],
+    [speciesFilter, pageSize],
   );
 
+  const loadMore = useCallback(() => {
+    if (!isLoadingMore && hasMore) {
+      void fetchLeaderboard(false, false);
+    }
+  }, [fetchLeaderboard, isLoadingMore, hasMore]);
+
   useEffect(() => {
-    void fetchLeaderboard(false);
+    void fetchLeaderboard(true, false);
   }, [fetchLeaderboard]);
 
   useEffect(() => {
@@ -126,7 +152,7 @@ export function useLeaderboardRealtime(
           }
 
           fetchRef.current = setTimeout(() => {
-            void fetchLeaderboard(true);
+            void fetchLeaderboard(true, true);
           }, 150);
         },
       )
@@ -144,7 +170,7 @@ export function useLeaderboardRealtime(
     };
   }, [fetchLeaderboard]);
 
-  return { entries, loading, error };
+  return { entries, loading, error, hasMore, isLoadingMore, loadMore };
 }
 
 export type { LeaderboardEntry };

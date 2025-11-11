@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
@@ -77,7 +77,12 @@ const Feed = () => {
   const [customSpeciesFilter, setCustomSpeciesFilter] = useState("");
   const [feedScope, setFeedScope] = useState<"all" | "following">("all");
   const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const offsetRef = useRef(0);
   const sessionFilter = searchParams.get("session");
+
+  const PAGE_SIZE = 20;
 
   useEffect(() => {
     if (!loading && !user) {
@@ -85,34 +90,59 @@ const Feed = () => {
     }
   }, [user, loading, navigate]);
 
-  useEffect(() => {
+  const loadCatches = useCallback(async (reset = false) => {
     if (!user) return;
 
-    const loadCatches = async () => {
+    const currentOffset = reset ? 0 : offsetRef.current;
+
+    if (reset) {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from("catches")
-        .select(`
-          *,
-          profiles:user_id (username, avatar_path, avatar_url),
-          ratings (rating),
-          comments:catch_comments (id),
-          reactions:catch_reactions (user_id)
-        `)
-        .order("created_at", { ascending: false });
+      setHasMore(true);
+      offsetRef.current = 0;
+    } else {
+      setIsLoadingMore(true);
+    }
 
-      if (error) {
-        toast.error("Failed to load catches");
-        console.error(error);
+    const { data, error } = await supabase
+      .from("catches")
+      .select(`
+        *,
+        profiles:user_id (username, avatar_path, avatar_url),
+        ratings (rating),
+        comments:catch_comments (id),
+        reactions:catch_reactions (user_id)
+      `)
+      .order("created_at", { ascending: false })
+      .range(currentOffset, currentOffset + PAGE_SIZE - 1);
+
+    if (error) {
+      toast.error("Failed to load catches");
+      console.error(error);
+      if (reset) {
         setCatches([]);
-      } else {
-        setCatches((data as Catch[]) || []);
       }
-      setIsLoading(false);
-    };
+    } else {
+      const newCatches = (data as Catch[]) || [];
+      if (reset) {
+        setCatches(newCatches);
+      } else {
+        setCatches(prev => [...prev, ...newCatches]);
+      }
+      setHasMore(newCatches.length === PAGE_SIZE);
+      offsetRef.current = currentOffset + newCatches.length;
+    }
 
-    void loadCatches();
-  }, [user]);
+    if (reset) {
+      setIsLoading(false);
+    } else {
+      setIsLoadingMore(false);
+    }
+  }, [user, PAGE_SIZE]);
+
+  useEffect(() => {
+    if (!user) return;
+    void loadCatches(true);
+  }, [user, loadCatches]);
 
   useEffect(() => {
     if (!user) {
@@ -382,6 +412,17 @@ const Feed = () => {
             </p>
             <Button variant="ocean" onClick={() => navigate("/add-catch")}>
               Log Your First Catch
+            </Button>
+          </div>
+        )}
+        {filteredCatches.length > 0 && hasMore && (
+          <div className="text-center py-8">
+            <Button
+              variant="outline"
+              onClick={() => void loadCatches(false)}
+              disabled={isLoadingMore}
+            >
+              {isLoadingMore ? "Loading..." : "Load More"}
             </Button>
           </div>
         )}

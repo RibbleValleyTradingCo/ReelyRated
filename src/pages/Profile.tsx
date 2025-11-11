@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
@@ -59,9 +59,13 @@ const Profile = () => {
   const [followLoading, setFollowLoading] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingProfiles, setFollowingProfiles] = useState<FollowingProfile[]>([]);
+  const [hasMoreCatches, setHasMoreCatches] = useState(true);
+  const [isLoadingMoreCatches, setIsLoadingMoreCatches] = useState(false);
+  const catchesOffsetRef = useRef(0);
 
   const profileId = profile?.id ?? null;
   const isOwnProfile = user?.id === profileId;
+  const CATCHES_PAGE_SIZE = 20;
 
   const profileAvatarUrl = useMemo(
     () => resolveAvatarUrl({ path: profile?.avatar_path, legacyUrl: profile?.avatar_url }),
@@ -110,18 +114,39 @@ const Profile = () => {
     }
   }, [navigate, slug]);
 
-  const fetchUserCatches = useCallback(async () => {
+  const fetchUserCatches = useCallback(async (reset = false) => {
     if (!profileId) return;
+
+    const currentOffset = reset ? 0 : catchesOffsetRef.current;
+
+    if (reset) {
+      setHasMoreCatches(true);
+      catchesOffsetRef.current = 0;
+    } else {
+      setIsLoadingMoreCatches(true);
+    }
+
     const { data, error } = await supabase
       .from("catches")
       .select("id, title, image_url, weight, weight_unit, species, created_at, ratings (rating)")
       .eq("user_id", profileId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(currentOffset, currentOffset + CATCHES_PAGE_SIZE - 1);
 
     if (!error && data) {
-      setCatches(data);
+      if (reset) {
+        setCatches(data);
+      } else {
+        setCatches(prev => [...prev, ...data]);
+      }
+      setHasMoreCatches(data.length === CATCHES_PAGE_SIZE);
+      catchesOffsetRef.current = currentOffset + data.length;
     }
-  }, [profileId]);
+
+    if (!reset) {
+      setIsLoadingMoreCatches(false);
+    }
+  }, [profileId, CATCHES_PAGE_SIZE]);
 
   const fetchFollowers = useCallback(async () => {
     if (!profileId) return;
@@ -180,7 +205,7 @@ const Profile = () => {
 
   useEffect(() => {
     if (!profileId) return;
-    void fetchUserCatches();
+    void fetchUserCatches(true);
     void fetchFollowers();
     void fetchFollowingProfiles();
   }, [profileId, fetchFollowers, fetchFollowingProfiles, fetchUserCatches]);
@@ -648,6 +673,17 @@ const Profile = () => {
                     </CardContent>
                   </Card>
                 ))}
+              </div>
+            )}
+            {catches.length > 0 && hasMoreCatches && (
+              <div className="text-center py-6">
+                <Button
+                  variant="outline"
+                  onClick={() => void fetchUserCatches(false)}
+                  disabled={isLoadingMoreCatches}
+                >
+                  {isLoadingMoreCatches ? "Loading..." : "Load More"}
+                </Button>
               </div>
             )}
           </section>
