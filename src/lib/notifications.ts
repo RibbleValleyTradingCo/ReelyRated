@@ -1,6 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
-import { ADMIN_USER_IDS } from "@/lib/admin";
 
 type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"];
 type NotificationInsert = Database["public"]["Tables"]["notifications"]["Insert"];
@@ -109,10 +108,6 @@ export const clearAllNotifications = async (userId: string) => {
 let cachedAdminIds: string[] | null = null;
 
 const loadAdminUserIds = async () => {
-  if (ADMIN_USER_IDS.length > 0) {
-    return ADMIN_USER_IDS;
-  }
-
   if (cachedAdminIds) {
     return cachedAdminIds;
   }
