@@ -632,6 +632,8 @@ const Profile = () => {
                         src={catchItem.image_url}
                         alt={catchItem.title}
                         className="h-48 w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
                       />
                       <div className="space-y-3 p-4">
                         <p className="truncate text-sm font-semibold text-slate-900">{catchItem.title}</p>

@@ -758,6 +758,8 @@ const CatchDetail = () => {
                         src={photo}
                         alt={`Gallery ${index + 1}`}
                         className="w-full h-40 object-cover rounded-lg cursor-pointer hover:opacity-80 transition"
+                        loading="lazy"
+                        decoding="async"
                       />
                     ))}
                   </div>
